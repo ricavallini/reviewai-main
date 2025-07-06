@@ -37,7 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (savedUser) {
       setUser(JSON.parse(savedUser));
     } else {
-      // Auto-login para desenvolvimento - remover em produção
+      // Usuário mock para desenvolvimento
       const mockUser: User = {
         id: '1',
         name: 'João Silva',
