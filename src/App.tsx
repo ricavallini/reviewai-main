@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import AuthCallback from './components/Auth/AuthCallback';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
             <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/" element={
                   <ProtectedRoute>
                     <Layout>
