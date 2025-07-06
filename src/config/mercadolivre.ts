@@ -7,7 +7,11 @@ export const MERCADO_LIVRE_CONFIG = {
   CLIENT_ID: process.env.VITE_MERCADO_LIVRE_CLIENT_ID || 'YOUR_CLIENT_ID_HERE',
   
   // URL de redirecionamento após autorização
-  REDIRECT_URI: window.location.origin + '/auth/callback',
+  // Em desenvolvimento: http://localhost:5173/auth/callback
+  // Em produção: https://reviewai-main.netlify.app/auth/callback (ou sua URL personalizada)
+  REDIRECT_URI: process.env.NODE_ENV === 'production' 
+    ? 'https://reviewai-main.netlify.app/auth/callback'
+    : window.location.origin + '/auth/callback',
   
   // URLs da API
   AUTH_URL: 'https://auth.mercadolivre.com.br/authorization',

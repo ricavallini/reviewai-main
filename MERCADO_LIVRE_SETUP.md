@@ -29,9 +29,14 @@ No seu aplicativo criado, configure as URLs de redirecionamento:
 http://localhost:5173/auth/callback
 ```
 
-**Para Produção:**
+**Para Produção (Netlify):**
 ```
-https://seudominio.com/auth/callback
+https://reviewai-main.netlify.app/auth/callback
+```
+
+**Se você tiver uma URL personalizada no Netlify, use:**
+```
+https://sua-url-personalizada.netlify.app/auth/callback
 ```
 
 ### 3. Obter Credenciais
@@ -100,7 +105,7 @@ VITE_MERCADO_LIVRE_CLIENT_ID=seu_client_id_aqui
 ### Erro: "URL de redirecionamento inválida"
 - Verifique se a URL está configurada corretamente no Portal de Desenvolvedores
 - Para desenvolvimento: `http://localhost:5173/auth/callback`
-- Para produção: `https://seudominio.com/auth/callback`
+- Para produção: `https://reviewai-main.netlify.app/auth/callback`
 
 ### Erro: "Estado inválido"
 - Limpe o localStorage do navegador
