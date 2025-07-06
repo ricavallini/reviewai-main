@@ -17,13 +17,15 @@ import { useMercadoLivre } from '../../hooks/useMercadoLivre';
 
 const MercadoLivreConfig: React.FC = () => {
   const [showClientId, setShowClientId] = useState(false);
+  const [showClientSecret, setShowClientSecret] = useState(false);
   const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
   const mercadoLivre = useMercadoLivre();
 
   const handleSaveCredentials = async () => {
-    if (!clientId.trim()) {
+    if (!clientId.trim() || !clientSecret.trim()) {
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 3000);
       return;
@@ -32,7 +34,7 @@ const MercadoLivreConfig: React.FC = () => {
     setSaveStatus('idle');
     
     try {
-      await mercadoLivre.connect(clientId);
+      await mercadoLivre.connect(clientId, clientSecret);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (error) {
@@ -130,16 +132,43 @@ const MercadoLivreConfig: React.FC = () => {
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Client Secret
+              </label>
+              <div className="relative">
+                <input
+                  type={showClientSecret ? 'text' : 'password'}
+                  value={clientSecret}
+                  onChange={(e) => setClientSecret(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Digite seu Client Secret do Mercado Livre"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowClientSecret(!showClientSecret)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  {showClientSecret ? (
+                    <EyeOff className="h-5 w-5 text-gray-400" />
+                  ) : (
+                    <Eye className="h-5 w-5 text-gray-400" />
+                  )}
+                </button>
+              </div>
+            </div>
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start space-x-3">
                 <Info className="w-5 h-5 text-blue-600 mt-0.5" />
                 <div className="text-sm text-blue-800">
-                  <p className="font-medium mb-1">Como obter o Client ID:</p>
+                  <p className="font-medium mb-1">Como obter as credenciais:</p>
                   <ol className="list-decimal list-inside space-y-1">
                     <li>Acesse o <a href="https://developers.mercadolivre.com.br/" target="_blank" rel="noopener noreferrer" className="underline">Portal de Desenvolvedores</a></li>
                     <li>Crie um novo aplicativo</li>
-                    <li>Copie o Client ID gerado</li>
-                    <li>Configure a URL de redirecionamento como: <code className="bg-blue-100 px-1 rounded">{window.location.origin}/auth/callback</code></li>
+                    <li>Copie o Client ID e Client Secret gerados</li>
+                    <li>Configure o tipo de aplicativo como "Server-to-Server"</li>
+                    <li>Não é necessário configurar URLs de redirecionamento</li>
                   </ol>
                 </div>
               </div>

@@ -1,12 +1,10 @@
-# Configuração da Integração Mercado Livre no Netlify
+# Configuração da Integração Mercado Livre no Netlify (Client Credentials)
 
-Este documento explica como configurar a integração com Mercado Livre especificamente para deploy no Netlify.
+Este documento explica como configurar a integração com Mercado Livre especificamente para deploy no Netlify usando Client Credentials.
 
 ## URLs do Seu Site
 
 **URL Principal:** https://reviewai-main.netlify.app
-
-**URL de Callback OAuth:** https://reviewai-main.netlify.app/auth/callback
 
 ## Passo a Passo para Configurar no Portal de Desenvolvedores
 
@@ -23,27 +21,16 @@ Este documento explica como configurar a integração com Mercado Livre especifi
    - **Nome**: ReviewAI
    - **Descrição**: Sistema de análise de reviews de produtos
    - **Categoria**: E-commerce
-   - **Tipo**: Web
+   - **Tipo**: Server-to-Server
 
-### 3. Configurar URLs de Redirecionamento
+### 3. Obter Credenciais
 
-Na seção "URLs de Redirecionamento", adicione:
+1. Após criar o aplicativo, você receberá:
+   - **Client ID**: ID único do aplicativo
+   - **Client Secret**: Chave secreta para autenticação
+2. Anote ambos cuidadosamente
 
-**Para Desenvolvimento:**
-```
-http://localhost:5173/auth/callback
-```
-
-**Para Produção (Netlify):**
-```
-https://reviewai-main.netlify.app/auth/callback
-```
-
-### 4. Salvar e Obter Credenciais
-
-1. Clique em "Salvar"
-2. Anote o **Client ID** gerado
-3. **NÃO** use o Client Secret no frontend
+**Importante**: Para aplicações Server-to-Server, não é necessário configurar URLs de redirecionamento.
 
 ## Configurar Variáveis de Ambiente no Netlify
 
@@ -53,17 +40,24 @@ https://reviewai-main.netlify.app/auth/callback
 2. Selecione seu projeto `reviewai-main`
 3. Vá em "Site settings" → "Environment variables"
 
-### 2. Adicionar Variável de Ambiente
+### 2. Adicionar Variáveis de Ambiente
 
 1. Clique em "Add a variable"
-2. Configure:
-   - **Key**: `VITE_MERCADO_LIVRE_CLIENT_ID`
-   - **Value**: `seu_client_id_aqui` (substitua pelo Client ID real)
-3. Clique em "Save"
+2. Adicione as seguintes variáveis:
+
+**Client ID:**
+- **Key**: `VITE_MERCADO_LIVRE_CLIENT_ID`
+- **Value**: `seu_client_id_aqui` (substitua pelo Client ID real)
+
+**Client Secret:**
+- **Key**: `VITE_MERCADO_LIVRE_CLIENT_SECRET`
+- **Value**: `seu_client_secret_aqui` (substitua pelo Client Secret real)
+
+3. Clique em "Save" para cada variável
 
 ### 3. Fazer Novo Deploy
 
-Após adicionar a variável de ambiente:
+Após adicionar as variáveis de ambiente:
 
 1. Vá em "Deploys"
 2. Clique em "Trigger deploy" → "Deploy site"
@@ -79,24 +73,25 @@ Após adicionar a variável de ambiente:
 ### 2. Configurar Integração
 
 1. Vá em "Configurações" → "Marketplaces"
-2. Clique em "Conectar" no Mercado Livre
-3. Siga o fluxo de autorização OAuth
+2. Digite seu Client ID e Client Secret
+3. Clique em "Salvar Credenciais"
+4. O sistema obterá automaticamente o access token
 
 ### 3. Verificar Funcionamento
 
-Após conectar, você deve ver:
+Após configurar, você deve ver:
 - Status: "Conectado"
-- Produtos reais do seu Mercado Livre
+- Produtos reais do Mercado Livre
 - Reviews reais dos produtos
 
+## Vantagens da Abordagem Server-to-Server
+
+✅ **Simplicidade**: Não requer redirecionamento do usuário
+✅ **Segurança**: Credenciais ficam no servidor (em produção)
+✅ **Performance**: Menos requisições de autenticação
+✅ **Controle**: Acesso direto sem intervenção do usuário
+
 ## Troubleshooting
-
-### Erro: "URL de redirecionamento inválida"
-
-**Solução:**
-1. Verifique se a URL está exatamente como: `https://reviewai-main.netlify.app/auth/callback`
-2. Confirme que não há espaços extras
-3. Verifique se o aplicativo está ativo no Portal de Desenvolvedores
 
 ### Erro: "Client ID inválido"
 
@@ -105,19 +100,26 @@ Após conectar, você deve ver:
 2. Confirme se o valor está correto
 3. Faça um novo deploy após configurar a variável
 
-### Erro: "Estado inválido"
+### Erro: "Client Secret inválido"
 
 **Solução:**
-1. Limpe o cache do navegador
-2. Tente novamente a autenticação
-3. Verifique se não há múltiplas abas abertas
+1. Verifique se a variável `VITE_MERCADO_LIVRE_CLIENT_SECRET` está configurada no Netlify
+2. Confirme se o valor está correto
+3. Verifique se não há espaços extras
 
 ### Erro: "Token expirado"
 
 **Solução:**
-1. O sistema deve renovar automaticamente
-2. Se persistir, faça logout e conecte novamente
-3. Verifique se o refresh_token está sendo armazenado
+1. O token expira automaticamente
+2. Configure as credenciais novamente
+3. O sistema obterá um novo token
+
+### Erro: "Não autenticado"
+
+**Solução:**
+1. Verifique se as credenciais foram salvas corretamente
+2. Tente configurar novamente
+3. Verifique se o aplicativo está ativo no Portal de Desenvolvedores
 
 ## Configuração de Domínio Personalizado (Opcional)
 
@@ -125,32 +127,38 @@ Se você quiser usar um domínio personalizado:
 
 1. No Netlify, vá em "Domain settings"
 2. Adicione seu domínio personalizado
-3. Atualize a URL de redirecionamento no Portal de Desenvolvedores:
-   ```
-   https://seudominio.com/auth/callback
-   ```
-4. Atualize o arquivo `src/config/mercadolivre.ts` com a nova URL
+3. Atualize as variáveis de ambiente se necessário
 
 ## Segurança
 
 ⚠️ **IMPORTANTE:**
 
-1. **Nunca exponha o Client Secret** no frontend
+1. **Nunca exponha o Client Secret** no frontend em produção
 2. **Use sempre HTTPS** em produção
 3. **Configure CORS** adequadamente se necessário
 4. **Monitore os logs** do Netlify para detectar problemas
+5. **Para produção real, use um backend** para gerenciar as credenciais
+
+## Limitações
+
+⚠️ **Atenção**: Esta abordagem tem algumas limitações:
+
+- **Acesso Limitado**: Não pode acessar dados específicos de um usuário
+- **Permissões**: Acesso apenas a dados públicos da API
+- **Segurança**: Credenciais expostas no frontend (use backend em produção)
 
 ## Suporte
 
 - **Netlify**: https://docs.netlify.com/
 - **Mercado Livre API**: https://developers.mercadolivre.com.br/
-- **Issues do Projeto**: GitHub do projeto
+- **Client Credentials Flow**: https://developers.mercadolivre.com.br/docs/oauth2
 
 ## Próximos Passos
 
 Após configurar com sucesso:
 
-1. Teste a sincronização de produtos
+1. Teste a busca de produtos
 2. Verifique se os reviews estão sendo carregados
 3. Configure notificações automáticas (se necessário)
-4. Monitore o uso da API 
+4. Monitore o uso da API
+5. Considere implementar um backend para maior segurança 

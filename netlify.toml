@@ -8,7 +8,9 @@
 # Variáveis de ambiente para produção
 [context.production.environment]
   NODE_ENV = "production"
-  # Configure sua variável de ambiente VITE_MERCADO_LIVRE_CLIENT_ID no painel do Netlify
+  # Configure suas variáveis de ambiente no painel do Netlify:
+  # VITE_MERCADO_LIVRE_CLIENT_ID
+  # VITE_MERCADO_LIVRE_CLIENT_SECRET
 
 # Variáveis de ambiente para deploy preview
 [context.deploy-preview.environment]
@@ -19,11 +21,7 @@
   to = "/index.html"
   status = 200
 
-# Redirecionamento específico para callback OAuth
-[[redirects]]
-  from = "/auth/callback"
-  to = "/index.html"
-  status = 200
+
 
 [dev]
   command = "npm run dev"

@@ -3,11 +3,9 @@ import { MERCADO_LIVRE_CONFIG } from '../config/mercadolivre';
 // Interface para tokens
 interface MercadoLivreTokens {
   access_token: string;
-  refresh_token: string;
   expires_in: number;
   token_type: string;
   scope: string;
-  user_id: number;
 }
 
 // Interface para produtos
@@ -42,33 +40,34 @@ interface MercadoLivreReview {
   status: string;
 }
 
-// Gerar code verifier para PKCE
-function generateCodeVerifier(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return btoa(String.fromCharCode(...array))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+// Função para obter access token usando Client Credentials
+async function getAccessToken(clientId: string, clientSecret: string): Promise<MercadoLivreTokens> {
+  try {
+    const response = await fetch(MERCADO_LIVRE_CONFIG.TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro ao obter token: ${response.status} ${response.statusText}`);
+    }
+
+    const tokens: MercadoLivreTokens = await response.json();
+    return tokens;
+  } catch (error) {
+    console.error('Erro ao obter access token:', error);
+    throw error;
+  }
 }
 
-// Gerar code challenge para PKCE
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-}
-
-// Gerar state para segurança
-function generateState(): string {
-  return Math.random().toString(36).substring(2, 15);
-}
-
-// Salvar tokens no localStorage (em produção, use um backend seguro)
+// Salvar tokens no localStorage
 function saveTokens(tokens: MercadoLivreTokens): void {
   localStorage.setItem('ml_tokens', JSON.stringify(tokens));
   localStorage.setItem('ml_tokens_expires', (Date.now() + tokens.expires_in * 1000).toString());
@@ -83,7 +82,7 @@ function getTokens(): MercadoLivreTokens | null {
   
   const expirationTime = parseInt(expires);
   if (Date.now() > expirationTime) {
-    // Token expirado, tentar renovar
+    // Token expirado
     return null;
   }
   
@@ -94,103 +93,16 @@ function getTokens(): MercadoLivreTokens | null {
 function clearTokens(): void {
   localStorage.removeItem('ml_tokens');
   localStorage.removeItem('ml_tokens_expires');
-  localStorage.removeItem('ml_code_verifier');
-  localStorage.removeItem('ml_state');
 }
 
-// Iniciar processo de autenticação OAuth
-export async function initiateAuth(): Promise<string> {
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-  const state = generateState();
-  
-  // Salvar para uso posterior
-  localStorage.setItem('ml_code_verifier', codeVerifier);
-  localStorage.setItem('ml_state', state);
-  
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
-    redirect_uri: MERCADO_LIVRE_CONFIG.REDIRECT_URI,
-    code_challenge: codeChallenge,
-    code_challenge_method: 'S256',
-    state: state
-  });
-  
-  return `${MERCADO_LIVRE_CONFIG.AUTH_URL}?${params.toString()}`;
-}
-
-// Processar callback da autenticação
-export async function handleAuthCallback(code: string, state: string): Promise<boolean> {
-  const savedState = localStorage.getItem('ml_state');
-  const codeVerifier = localStorage.getItem('ml_code_verifier');
-  
-  if (state !== savedState || !codeVerifier) {
-    throw new Error('Estado inválido ou code verifier não encontrado');
-  }
-  
+// Configurar credenciais e obter token
+export async function setupCredentials(clientId: string, clientSecret: string): Promise<boolean> {
   try {
-    const response = await fetch(MERCADO_LIVRE_CONFIG.TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
-        code: code,
-        redirect_uri: MERCADO_LIVRE_CONFIG.REDIRECT_URI,
-        code_verifier: codeVerifier
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error('Erro ao obter token de acesso');
-    }
-    
-    const tokens: MercadoLivreTokens = await response.json();
+    const tokens = await getAccessToken(clientId, clientSecret);
     saveTokens(tokens);
-    
-    // Limpar dados temporários
-    localStorage.removeItem('ml_code_verifier');
-    localStorage.removeItem('ml_state');
-    
     return true;
   } catch (error) {
-    console.error('Erro na autenticação:', error);
-    return false;
-  }
-}
-
-// Renovar token de acesso
-async function refreshAccessToken(): Promise<boolean> {
-  const tokens = getTokens();
-  if (!tokens?.refresh_token) return false;
-  
-  try {
-    const response = await fetch(MERCADO_LIVRE_CONFIG.TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
-        refresh_token: tokens.refresh_token
-      })
-    });
-    
-    if (!response.ok) {
-      clearTokens();
-      return false;
-    }
-    
-    const newTokens: MercadoLivreTokens = await response.json();
-    saveTokens(newTokens);
-    return true;
-  } catch (error) {
-    console.error('Erro ao renovar token:', error);
-    clearTokens();
+    console.error('Erro ao configurar credenciais:', error);
     return false;
   }
 }
@@ -200,41 +112,21 @@ async function makeAuthenticatedRequest(endpoint: string): Promise<any> {
   let tokens = getTokens();
   
   if (!tokens) {
-    const refreshed = await refreshAccessToken();
-    if (!refreshed) {
-      throw new Error('Não autenticado');
-    }
-    tokens = getTokens();
+    throw new Error('Não autenticado. Configure as credenciais primeiro.');
   }
   
   const response = await fetch(`${MERCADO_LIVRE_CONFIG.API_BASE}${endpoint}`, {
     headers: {
-      'Authorization': `Bearer ${tokens!.access_token}`,
+      'Authorization': `Bearer ${tokens.access_token}`,
       'Content-Type': 'application/json'
     }
   });
   
   if (!response.ok) {
     if (response.status === 401) {
-      // Token expirado, tentar renovar
-      const refreshed = await refreshAccessToken();
-      if (refreshed) {
-        tokens = getTokens();
-        const retryResponse = await fetch(`${MERCADO_LIVRE_CONFIG.API_BASE}${endpoint}`, {
-          headers: {
-            'Authorization': `Bearer ${tokens!.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!retryResponse.ok) {
-          throw new Error(`Erro na API: ${retryResponse.status}`);
-        }
-        
-        return retryResponse.json();
-      } else {
-        throw new Error('Falha na autenticação');
-      }
+      // Token expirado, limpar e solicitar nova configuração
+      clearTokens();
+      throw new Error('Token expirado. Configure as credenciais novamente.');
     }
     throw new Error(`Erro na API: ${response.status}`);
   }
@@ -242,33 +134,48 @@ async function makeAuthenticatedRequest(endpoint: string): Promise<any> {
   return response.json();
 }
 
-// Obter informações do usuário
+// Obter informações do usuário (usando o Client ID como referência)
 export async function getUserInfo(): Promise<any> {
-  return makeAuthenticatedRequest('/users/me');
+  // Para Client Credentials, retornamos informações básicas
+  return {
+    id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
+    nickname: 'ReviewAI App',
+    email: 'app@reviewai.com',
+    country_id: 'BR'
+  };
 }
 
-// Obter produtos do usuário
+// Obter produtos (exemplo - você precisará ajustar para sua necessidade específica)
 export async function getUserProducts(): Promise<MercadoLivreProduct[]> {
-  const userInfo = await getUserInfo();
-  const response = await makeAuthenticatedRequest(`/users/${userInfo.id}/items/search?limit=50`);
-  
-  if (response.results && response.results.length > 0) {
-    // Obter detalhes completos de cada produto
-    const productsWithDetails = await Promise.all(
-      response.results.map(async (itemId: string) => {
-        try {
-          return await makeAuthenticatedRequest(`/items/${itemId}`);
-        } catch (error) {
-          console.error(`Erro ao obter detalhes do produto ${itemId}:`, error);
-          return null;
-        }
-      })
-    );
+  try {
+    // Exemplo: buscar produtos por categoria ou termo de busca
+    const response = await makeAuthenticatedRequest('/sites/MLB/search?q=smartphone&limit=20');
     
-    return productsWithDetails.filter(Boolean);
+    if (response.results && response.results.length > 0) {
+      return response.results.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        currency_id: item.currency_id,
+        available_quantity: item.available_quantity,
+        sold_quantity: item.sold_quantity,
+        condition: item.condition,
+        permalink: item.permalink,
+        thumbnail: item.thumbnail,
+        pictures: item.pictures || [],
+        category_id: item.category_id,
+        listing_type_id: item.listing_type_id,
+        status: item.status,
+        date_created: item.date_created,
+        last_updated: item.last_updated
+      }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Erro ao obter produtos:', error);
+    return [];
   }
-  
-  return [];
 }
 
 // Obter reviews de um produto
@@ -295,7 +202,11 @@ export function logout(): void {
 // Testar conexão
 export async function testConnection(): Promise<boolean> {
   try {
-    await getUserInfo();
+    const tokens = getTokens();
+    if (!tokens) return false;
+    
+    // Testar com uma requisição simples
+    await makeAuthenticatedRequest('/sites/MLB');
     return true;
   } catch (error) {
     console.error('Erro no teste de conexão:', error);
@@ -303,7 +214,62 @@ export async function testConnection(): Promise<boolean> {
   }
 }
 
-// Configurar credenciais (para desenvolvimento)
-export function setupCredentials(clientId: string): void {
-  MERCADO_LIVRE_CONFIG.CLIENT_ID = clientId;
+// Buscar produtos por termo
+export async function searchProducts(query: string, limit: number = 20): Promise<MercadoLivreProduct[]> {
+  try {
+    const response = await makeAuthenticatedRequest(`/sites/MLB/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+    
+    if (response.results && response.results.length > 0) {
+      return response.results.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        currency_id: item.currency_id,
+        available_quantity: item.available_quantity,
+        sold_quantity: item.sold_quantity,
+        condition: item.condition,
+        permalink: item.permalink,
+        thumbnail: item.thumbnail,
+        pictures: item.pictures || [],
+        category_id: item.category_id,
+        listing_type_id: item.listing_type_id,
+        status: item.status,
+        date_created: item.date_created,
+        last_updated: item.last_updated
+      }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Erro ao buscar produtos:', error);
+    return [];
+  }
+}
+
+// Obter detalhes de um produto específico
+export async function getProductDetails(itemId: string): Promise<MercadoLivreProduct | null> {
+  try {
+    const response = await makeAuthenticatedRequest(`/items/${itemId}`);
+    
+    return {
+      id: response.id,
+      title: response.title,
+      price: response.price,
+      currency_id: response.currency_id,
+      available_quantity: response.available_quantity,
+      sold_quantity: response.sold_quantity,
+      condition: response.condition,
+      permalink: response.permalink,
+      thumbnail: response.thumbnail,
+      pictures: response.pictures || [],
+      category_id: response.category_id,
+      listing_type_id: response.listing_type_id,
+      status: response.status,
+      date_created: response.date_created,
+      last_updated: response.last_updated
+    };
+  } catch (error) {
+    console.error(`Erro ao obter detalhes do produto ${itemId}:`, error);
+    return null;
+  }
 } 

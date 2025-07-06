@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  initiateAuth,
-  handleAuthCallback,
+  setupCredentials,
   getUserInfo,
   getUserProducts,
   getProductReviews,
   isAuthenticated,
   logout,
   testConnection,
-  setupCredentials
+  searchProducts,
+  getProductDetails
 } from '../services/mercadolivre';
 
 interface MercadoLivreStats {
@@ -79,45 +79,25 @@ export const useMercadoLivre = () => {
     }
   }, []);
 
-  // Iniciar processo de autenticação
-  const connect = useCallback(async (clientId?: string) => {
+  // Configurar credenciais e conectar
+  const connect = useCallback(async (clientId: string, clientSecret: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     
     try {
-      if (clientId) {
-        setupCredentials(clientId);
-      }
-      
-      const authUrl = await initiateAuth();
-      window.location.href = authUrl;
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: 'Erro ao iniciar autenticação',
-        isLoading: false
-      }));
-    }
-  }, []);
-
-  // Processar callback da autenticação
-  const processAuthCallback = useCallback(async (code: string, state: string) => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-    
-    try {
-      const success = await handleAuthCallback(code, state);
+      const success = await setupCredentials(clientId, clientSecret);
       if (success) {
         await checkConnectionStatus();
       } else {
         setState(prev => ({
           ...prev,
-          error: 'Falha na autenticação',
+          error: 'Falha na configuração das credenciais',
           isLoading: false
         }));
       }
     } catch (error) {
       setState(prev => ({
         ...prev,
-        error: 'Erro ao processar autenticação',
+        error: 'Erro ao configurar credenciais',
         isLoading: false
       }));
     }
@@ -239,11 +219,12 @@ export const useMercadoLivre = () => {
     // Ações
     connect,
     disconnect,
-    processAuthCallback,
     loadProducts,
     testConnection: testConnectionStatus,
     syncData,
     clearError,
-    checkConnectionStatus
+    checkConnectionStatus,
+    searchProducts,
+    getProductDetails
   };
 }; 

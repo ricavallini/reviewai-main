@@ -6,20 +6,12 @@ export const MERCADO_LIVRE_CONFIG = {
   // Substitua pelo seu Client ID do Portal de Desenvolvedores do Mercado Livre
   CLIENT_ID: process.env.VITE_MERCADO_LIVRE_CLIENT_ID || 'YOUR_CLIENT_ID_HERE',
   
-  // URL de redirecionamento após autorização
-  // Em desenvolvimento: http://localhost:5173/auth/callback
-  // Em produção: https://reviewai-main.netlify.app/auth/callback (ou sua URL personalizada)
-  REDIRECT_URI: process.env.NODE_ENV === 'production' 
-    ? 'https://reviewai-main.netlify.app/auth/callback'
-    : window.location.origin + '/auth/callback',
-  
   // URLs da API
-  AUTH_URL: 'https://auth.mercadolivre.com.br/authorization',
   TOKEN_URL: 'https://api.mercadolibre.com/oauth/token',
   API_BASE: 'https://api.mercadolibre.com',
   
   // Escopo das permissões solicitadas
-  SCOPE: 'read write offline_access'
+  SCOPE: 'read write'
 };
 
 // Instruções para configurar:
