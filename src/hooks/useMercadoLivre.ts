@@ -249,13 +249,12 @@ export const useMercadoLivre = () => {
 
     try {
       // Marcar como inativo no banco
-      const { error } = await import('../lib/supabase').then(({ supabase }) =>
-        supabase
-          .from('marketplace_credentials')
-          .update({ is_active: false })
-          .eq('user_id', user.id)
-          .eq('marketplace', 'mercadolivre')
-      );
+      const { supabase } = await import('../lib/supabase');
+      const { error } = await supabase
+        .from('marketplace_credentials')
+        .update({ is_active: false })
+        .eq('user_id', user.id)
+        .eq('marketplace', 'mercadolivre');
 
       if (error) throw error;
 

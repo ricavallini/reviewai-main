@@ -36,6 +36,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
+    } else {
+      // Auto-login para desenvolvimento - remover em produção
+      const mockUser: User = {
+        id: '1',
+        name: 'João Silva',
+        email: 'joao@empresa.com',
+        company: 'Loja Digital Ltda',
+        plan: 'premium',
+        isAdmin: true,
+        avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=150'
+      };
+      setUser(mockUser);
+      localStorage.setItem('user', JSON.stringify(mockUser));
     }
     setIsLoading(false);
   }, []);
