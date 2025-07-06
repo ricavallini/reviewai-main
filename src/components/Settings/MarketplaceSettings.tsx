@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingCart, 
@@ -17,6 +17,7 @@ import {
   Settings as SettingsIcon,
   Loader2
 } from 'lucide-react';
+import { useMercadoLivre } from '../../hooks/useMercadoLivre';
 
 interface MarketplaceCredentials {
   apiKey: string;
@@ -41,8 +42,10 @@ interface MarketplaceConfig {
 
 const MarketplaceSettings: React.FC = () => {
   const [showCredentials, setShowCredentials] = useState<{ [key: string]: boolean }>({});
-  const [isLoading, setIsLoading] = useState<{ [key: string]: boolean }>({});
   const [saveStatus, setSaveStatus] = useState<{ [key: string]: 'idle' | 'success' | 'error' }>({});
+  
+  // Hook da integração com Mercado Livre
+  const mercadoLivre = useMercadoLivre();
   
   const [marketplaces, setMarketplaces] = useState<MarketplaceConfig[]>([
     {
@@ -50,16 +53,16 @@ const MarketplaceSettings: React.FC = () => {
       name: 'Mercado Livre',
       icon: ShoppingCart,
       color: 'yellow',
-      isConnected: true,
-      status: 'connected',
-      lastSync: new Date(),
-      productsCount: 15,
-      reviewsCount: 1250,
+      isConnected: mercadoLivre.isConnected,
+      status: mercadoLivre.isLoading ? 'syncing' : mercadoLivre.isConnected ? 'connected' : 'disconnected',
+      lastSync: mercadoLivre.stats.lastSync || undefined,
+      productsCount: mercadoLivre.stats.totalProducts,
+      reviewsCount: mercadoLivre.stats.totalReviews,
       credentials: {
-        apiKey: 'ML_API_KEY_123456789',
-        secretKey: 'ML_SECRET_987654321',
-        accessToken: 'ML_ACCESS_TOKEN_456789123',
-        storeId: 'STORE_ID_123',
+        apiKey: '',
+        secretKey: '',
+        accessToken: '',
+        storeId: '',
         webhookUrl: 'https://api.reviewai.com/webhooks/mercadolivre'
       }
     },
@@ -94,6 +97,22 @@ const MarketplaceSettings: React.FC = () => {
       }
     }
   ]);
+
+  // Atualizar estado do Mercado Livre quando a integração mudar
+  useEffect(() => {
+    setMarketplaces(prev => prev.map(marketplace => 
+      marketplace.id === 'mercadolivre' 
+        ? {
+            ...marketplace,
+            isConnected: mercadoLivre.isConnected,
+            status: mercadoLivre.isLoading ? 'syncing' : mercadoLivre.isConnected ? 'connected' : 'disconnected',
+            lastSync: mercadoLivre.stats.lastSync || undefined,
+            productsCount: mercadoLivre.stats.totalProducts,
+            reviewsCount: mercadoLivre.stats.totalReviews,
+          }
+        : marketplace
+    ));
+  }, [mercadoLivre.isConnected, mercadoLivre.isLoading, mercadoLivre.stats]);
 
   const getColorClasses = (color: string) => {
     const colors = {
@@ -149,41 +168,63 @@ const MarketplaceSettings: React.FC = () => {
   };
 
   const saveMarketplaceConfig = async (marketplaceId: string) => {
-    setIsLoading(prev => ({ ...prev, [marketplaceId]: true }));
     setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'idle' }));
 
     try {
-      // Simular salvamento
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Atualizar status
-      setMarketplaces(prev => prev.map(marketplace => 
-        marketplace.id === marketplaceId 
-          ? {
-              ...marketplace,
-              isConnected: true,
-              status: 'connected',
-              lastSync: new Date(),
-              productsCount: Math.floor(Math.random() * 50) + 10,
-              reviewsCount: Math.floor(Math.random() * 2000) + 500
-            }
-          : marketplace
-      ));
+      if (marketplaceId === 'mercadolivre') {
+        const marketplace = marketplaces.find(m => m.id === marketplaceId);
+        if (!marketplace) throw new Error('Marketplace não encontrado');
 
-      setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'success' }));
-      
-      // Reset status após 3 segundos
-      setTimeout(() => {
-        setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'idle' }));
-      }, 3000);
+        // Configurar credenciais do Mercado Livre
+        await mercadoLivre.setupCredentials(
+          marketplace.credentials.accessToken,
+          marketplace.credentials.secretKey
+        );
+
+        // Testar conexão
+        const isConnected = await mercadoLivre.testConnection();
+        
+        if (isConnected) {
+          setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'success' }));
+          
+          // Reset status após 3 segundos
+          setTimeout(() => {
+            setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'idle' }));
+          }, 3000);
+        } else {
+          throw new Error('Falha na conexão com o Mercado Livre');
+        }
+      } else {
+        // Simular salvamento para outros marketplaces
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        setMarketplaces(prev => prev.map(marketplace => 
+          marketplace.id === marketplaceId 
+            ? {
+                ...marketplace,
+                isConnected: true,
+                status: 'connected',
+                lastSync: new Date(),
+                productsCount: Math.floor(Math.random() * 50) + 10,
+                reviewsCount: Math.floor(Math.random() * 2000) + 500
+              }
+            : marketplace
+        ));
+
+        setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'success' }));
+        
+        // Reset status após 3 segundos
+        setTimeout(() => {
+          setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'idle' }));
+        }, 3000);
+      }
 
     } catch (error) {
       setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'error' }));
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'idle' }));
       }, 3000);
-    } finally {
-      setIsLoading(prev => ({ ...prev, [marketplaceId]: false }));
+      throw error;
     }
   };
 
@@ -195,17 +236,32 @@ const MarketplaceSettings: React.FC = () => {
     ));
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      setMarketplaces(prev => prev.map(marketplace => 
-        marketplace.id === marketplaceId 
-          ? { 
-              ...marketplace, 
-              status: 'connected',
-              lastSync: new Date()
-            }
-          : marketplace
-      ));
+      if (marketplaceId === 'mercadolivre') {
+        const isConnected = await mercadoLivre.testConnection();
+        
+        setMarketplaces(prev => prev.map(marketplace => 
+          marketplace.id === marketplaceId 
+            ? { 
+                ...marketplace, 
+                status: isConnected ? 'connected' : 'error',
+                lastSync: isConnected ? new Date() : marketplace.lastSync
+              }
+            : marketplace
+        ));
+      } else {
+        // Simular teste para outros marketplaces
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        setMarketplaces(prev => prev.map(marketplace => 
+          marketplace.id === marketplaceId 
+            ? { 
+                ...marketplace, 
+                status: 'connected',
+                lastSync: new Date()
+              }
+            : marketplace
+        ));
+      }
     } catch (error) {
       setMarketplaces(prev => prev.map(marketplace => 
         marketplace.id === marketplaceId 
