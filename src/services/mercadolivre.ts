@@ -8,8 +8,8 @@ interface MercadoLivreTokens {
   scope: string;
 }
 
-// Interface para produtos
-interface MercadoLivreProduct {
+// Interface para produtos do Mercado Livre
+export interface MercadoLivreProduct {
   id: string;
   title: string;
   price: number;
@@ -25,10 +25,13 @@ interface MercadoLivreProduct {
   status: string;
   date_created: string;
   last_updated: string;
+  seller_id?: number;
+  category_name?: string;
+  description?: string;
 }
 
-// Interface para reviews
-interface MercadoLivreReview {
+// Interface para reviews do Mercado Livre
+export interface MercadoLivreReview {
   id: string;
   rating: number;
   comment: string;
@@ -38,6 +41,27 @@ interface MercadoLivreReview {
   };
   date: string;
   status: string;
+  item_id: string;
+}
+
+// Interface para usuário do Mercado Livre
+export interface MercadoLivreUser {
+  id: number;
+  nickname: string;
+  email: string;
+  country_id: string;
+  permalink: string;
+  site_id: string;
+}
+
+// Interface para busca de produtos
+export interface SearchResponse {
+  results: MercadoLivreProduct[];
+  paging: {
+    total: number;
+    offset: number;
+    limit: number;
+  };
 }
 
 // Função para obter access token usando Client Credentials
@@ -56,7 +80,8 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<M
     });
 
     if (!response.ok) {
-      throw new Error(`Erro ao obter token: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Erro ao obter token: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
     const tokens: MercadoLivreTokens = await response.json();
@@ -128,31 +153,32 @@ async function makeAuthenticatedRequest(endpoint: string): Promise<any> {
       clearTokens();
       throw new Error('Token expirado. Configure as credenciais novamente.');
     }
-    throw new Error(`Erro na API: ${response.status}`);
+    throw new Error(`Erro na API: ${response.status} ${response.statusText}`);
   }
   
   return response.json();
 }
 
 // Obter informações do usuário (usando o Client ID como referência)
-export async function getUserInfo(): Promise<any> {
+export async function getUserInfo(): Promise<MercadoLivreUser> {
   // Para Client Credentials, retornamos informações básicas
   return {
-    id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
+    id: parseInt(MERCADO_LIVRE_CONFIG.CLIENT_ID) || 0,
     nickname: 'ReviewAI App',
     email: 'app@reviewai.com',
-    country_id: 'BR'
+    country_id: 'BR',
+    permalink: 'https://reviewai.com',
+    site_id: 'MLB'
   };
 }
 
-// Obter produtos (exemplo - você precisará ajustar para sua necessidade específica)
-export async function getUserProducts(): Promise<MercadoLivreProduct[]> {
+// Buscar produtos por termo de busca
+export async function searchProducts(query: string, limit: number = 20, offset: number = 0): Promise<SearchResponse> {
   try {
-    // Exemplo: buscar produtos por categoria ou termo de busca
-    const response = await makeAuthenticatedRequest('/sites/MLB/search?q=smartphone&limit=20');
+    const response = await makeAuthenticatedRequest(`/sites/MLB/search?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`);
     
-    if (response.results && response.results.length > 0) {
-      return response.results.map((item: any) => ({
+    return {
+      results: response.results.map((item: any) => ({
         id: item.id,
         title: item.title,
         price: item.price,
@@ -167,14 +193,46 @@ export async function getUserProducts(): Promise<MercadoLivreProduct[]> {
         listing_type_id: item.listing_type_id,
         status: item.status,
         date_created: item.date_created,
-        last_updated: item.last_updated
-      }));
-    }
-    
-    return [];
+        last_updated: item.last_updated,
+        seller_id: item.seller?.id,
+        category_name: item.category_name
+      })),
+      paging: response.paging
+    };
   } catch (error) {
-    console.error('Erro ao obter produtos:', error);
-    return [];
+    console.error('Erro ao buscar produtos:', error);
+    throw error;
+  }
+}
+
+// Obter detalhes de um produto específico
+export async function getProductDetails(itemId: string): Promise<MercadoLivreProduct | null> {
+  try {
+    const response = await makeAuthenticatedRequest(`/items/${itemId}`);
+    
+    return {
+      id: response.id,
+      title: response.title,
+      price: response.price,
+      currency_id: response.currency_id,
+      available_quantity: response.available_quantity,
+      sold_quantity: response.sold_quantity,
+      condition: response.condition,
+      permalink: response.permalink,
+      thumbnail: response.thumbnail,
+      pictures: response.pictures || [],
+      category_id: response.category_id,
+      listing_type_id: response.listing_type_id,
+      status: response.status,
+      date_created: response.date_created,
+      last_updated: response.last_updated,
+      seller_id: response.seller_id,
+      category_name: response.category_name,
+      description: response.description
+    };
+  } catch (error) {
+    console.error(`Erro ao obter detalhes do produto ${itemId}:`, error);
+    return null;
   }
 }
 
@@ -186,6 +244,84 @@ export async function getProductReviews(itemId: string): Promise<MercadoLivreRev
   } catch (error) {
     console.error(`Erro ao obter reviews do produto ${itemId}:`, error);
     return [];
+  }
+}
+
+// Buscar produtos por categoria
+export async function searchProductsByCategory(categoryId: string, limit: number = 20): Promise<SearchResponse> {
+  try {
+    const response = await makeAuthenticatedRequest(`/sites/MLB/search?category=${categoryId}&limit=${limit}`);
+    
+    return {
+      results: response.results.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        currency_id: item.currency_id,
+        available_quantity: item.available_quantity,
+        sold_quantity: item.sold_quantity,
+        condition: item.condition,
+        permalink: item.permalink,
+        thumbnail: item.thumbnail,
+        pictures: item.pictures || [],
+        category_id: item.category_id,
+        listing_type_id: item.listing_type_id,
+        status: item.status,
+        date_created: item.date_created,
+        last_updated: item.last_updated,
+        seller_id: item.seller?.id,
+        category_name: item.category_name
+      })),
+      paging: response.paging
+    };
+  } catch (error) {
+    console.error('Erro ao buscar produtos por categoria:', error);
+    throw error;
+  }
+}
+
+// Obter categorias populares
+export async function getPopularCategories(): Promise<any[]> {
+  try {
+    const response = await makeAuthenticatedRequest('/sites/MLB/categories');
+    return response.slice(0, 10); // Retorna as 10 primeiras categorias
+  } catch (error) {
+    console.error('Erro ao obter categorias:', error);
+    return [];
+  }
+}
+
+// Buscar produtos em destaque
+export async function getFeaturedProducts(limit: number = 20): Promise<SearchResponse> {
+  try {
+    // Buscar produtos com mais vendas
+    const response = await makeAuthenticatedRequest(`/sites/MLB/search?sort=sold_quantity_desc&limit=${limit}`);
+    
+    return {
+      results: response.results.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        currency_id: item.currency_id,
+        available_quantity: item.available_quantity,
+        sold_quantity: item.sold_quantity,
+        condition: item.condition,
+        permalink: item.permalink,
+        thumbnail: item.thumbnail,
+        pictures: item.pictures || [],
+        category_id: item.category_id,
+        listing_type_id: item.listing_type_id,
+        status: item.status,
+        date_created: item.date_created,
+        last_updated: item.last_updated,
+        seller_id: item.seller?.id,
+        category_name: item.category_name
+      })),
+      paging: response.paging
+    };
+  } catch (error) {
+    console.error('Erro ao obter produtos em destaque:', error);
+    throw error;
   }
 }
 
@@ -214,62 +350,68 @@ export async function testConnection(): Promise<boolean> {
   }
 }
 
-// Buscar produtos por termo
-export async function searchProducts(query: string, limit: number = 20): Promise<MercadoLivreProduct[]> {
+// Sincronizar dados de produtos
+export async function syncProductData(productIds: string[]): Promise<{
+  products: MercadoLivreProduct[];
+  reviews: MercadoLivreReview[];
+}> {
+  const products: MercadoLivreProduct[] = [];
+  const allReviews: MercadoLivreReview[] = [];
+
   try {
-    const response = await makeAuthenticatedRequest(`/sites/MLB/search?q=${encodeURIComponent(query)}&limit=${limit}`);
-    
-    if (response.results && response.results.length > 0) {
-      return response.results.map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        price: item.price,
-        currency_id: item.currency_id,
-        available_quantity: item.available_quantity,
-        sold_quantity: item.sold_quantity,
-        condition: item.condition,
-        permalink: item.permalink,
-        thumbnail: item.thumbnail,
-        pictures: item.pictures || [],
-        category_id: item.category_id,
-        listing_type_id: item.listing_type_id,
-        status: item.status,
-        date_created: item.date_created,
-        last_updated: item.last_updated
-      }));
+    // Obter detalhes de cada produto
+    for (const productId of productIds) {
+      const product = await getProductDetails(productId);
+      if (product) {
+        products.push(product);
+        
+        // Obter reviews do produto
+        const reviews = await getProductReviews(productId);
+        allReviews.push(...reviews);
+      }
     }
-    
-    return [];
+
+    return { products, reviews: allReviews };
   } catch (error) {
-    console.error('Erro ao buscar produtos:', error);
-    return [];
+    console.error('Erro na sincronização:', error);
+    throw error;
   }
 }
 
-// Obter detalhes de um produto específico
-export async function getProductDetails(itemId: string): Promise<MercadoLivreProduct | null> {
-  try {
-    const response = await makeAuthenticatedRequest(`/items/${itemId}`);
-    
-    return {
-      id: response.id,
-      title: response.title,
-      price: response.price,
-      currency_id: response.currency_id,
-      available_quantity: response.available_quantity,
-      sold_quantity: response.sold_quantity,
-      condition: response.condition,
-      permalink: response.permalink,
-      thumbnail: response.thumbnail,
-      pictures: response.pictures || [],
-      category_id: response.category_id,
-      listing_type_id: response.listing_type_id,
-      status: response.status,
-      date_created: response.date_created,
-      last_updated: response.last_updated
-    };
-  } catch (error) {
-    console.error(`Erro ao obter detalhes do produto ${itemId}:`, error);
-    return null;
-  }
+// Analisar sentimento de um comentário (simulação)
+export function analyzeSentiment(comment: string): 'positive' | 'negative' | 'neutral' {
+  const positiveWords = ['bom', 'ótimo', 'excelente', 'maravilhoso', 'perfeito', 'recomendo', 'gostei', 'satisfeito'];
+  const negativeWords = ['ruim', 'péssimo', 'terrível', 'decepcionado', 'não recomendo', 'problema', 'defeito', 'insatisfeito'];
+  
+  const lowerComment = comment.toLowerCase();
+  const positiveCount = positiveWords.filter(word => lowerComment.includes(word)).length;
+  const negativeCount = negativeWords.filter(word => lowerComment.includes(word)).length;
+  
+  if (positiveCount > negativeCount) return 'positive';
+  if (negativeCount > positiveCount) return 'negative';
+  return 'neutral';
+}
+
+// Gerar resposta automática baseada no sentimento
+export function generateAutoResponse(review: MercadoLivreReview, sentiment: 'positive' | 'negative' | 'neutral'): string {
+  const responses = {
+    positive: [
+      'Muito obrigado pelo seu feedback positivo! Ficamos felizes que tenha gostado do produto! 😊',
+      'Que ótimo que você gostou! Sua satisfação é nossa prioridade! 👍',
+      'Obrigado pela avaliação! Ficamos muito felizes com seu feedback! 🌟'
+    ],
+    negative: [
+      'Sentimos muito pelo problema. Vamos resolver isso rapidamente! Pode nos contatar pelo chat?',
+      'Lamentamos pela experiência negativa. Vamos entrar em contato para resolver!',
+      'Peço desculpas pelo inconveniente. Vamos corrigir isso imediatamente!'
+    ],
+    neutral: [
+      'Obrigado pelo seu feedback! Estamos sempre trabalhando para melhorar!',
+      'Agradecemos sua avaliação! Sua opinião é muito importante para nós!',
+      'Obrigado pelo comentário! Continuamos melhorando nossos produtos!'
+    ]
+  };
+
+  const responseArray = responses[sentiment];
+  return responseArray[Math.floor(Math.random() * responseArray.length)];
 } 

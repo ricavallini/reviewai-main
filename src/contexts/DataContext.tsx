@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useMercadoLivre } from '../hooks/useMercadoLivre';
+import { MercadoLivreProduct, MercadoLivreReview } from '../services/mercadolivre';
 
 export interface Review {
   id: string;
@@ -12,6 +14,7 @@ export interface Review {
   keywords: string[];
   aiResponse?: string;
   isUrgent?: boolean;
+  marketplace?: string;
 }
 
 export interface Product {
@@ -28,6 +31,11 @@ export interface Product {
   lastAnalysis: Date;
   marketplace?: string;
   description?: string;
+  availableQuantity?: number;
+  soldQuantity?: number;
+  condition?: string;
+  sellerId?: number;
+  categoryName?: string;
 }
 
 export interface NewProductData {
@@ -50,7 +58,12 @@ interface DataContextType {
   addProduct: (productData: NewProductData) => Promise<Product>;
   updateProduct: (productId: string, updates: Partial<Product>) => void;
   deleteProduct: (productId: string) => void;
+  searchProducts: (query: string) => Promise<Product[]>;
+  loadProductFromMercadoLivre: (productId: string) => Promise<Product | null>;
+  syncMercadoLivreData: (productIds: string[]) => Promise<void>;
   isLoading: boolean;
+  mercadoLivreProducts: MercadoLivreProduct[];
+  mercadoLivreReviews: MercadoLivreReview[];
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -63,82 +76,46 @@ export const useData = () => {
   return context;
 };
 
-// Mock data
-const mockProducts: Product[] = [
-  {
-    id: '1',
-    name: 'Smartphone Galaxy Pro Max',
-    image: 'https://images.pexels.com/photos/607812/pexels-photo-607812.jpeg?auto=compress&cs=tinysrgb&w=300',
-    marketplaceUrl: 'https://mercadolivre.com.br/produto/1',
-    avgRating: 4.2,
-    totalReviews: 1250,
-    recentReviews: 89,
-    trend: 'up',
-    category: 'Eletrônicos',
-    price: 1899.99,
+// Função para converter MercadoLivreProduct para Product
+const convertMercadoLivreProduct = (mlProduct: MercadoLivreProduct): Product => {
+  return {
+    id: mlProduct.id,
+    name: mlProduct.title,
+    image: mlProduct.thumbnail,
+    marketplaceUrl: mlProduct.permalink,
+    avgRating: 0, // Será calculado quando carregar os reviews
+    totalReviews: 0, // Será calculado quando carregar os reviews
+    recentReviews: 0, // Será calculado quando carregar os reviews
+    trend: 'stable', // Será calculado baseado nos dados
+    category: mlProduct.category_name || 'Sem categoria',
+    price: mlProduct.price,
     lastAnalysis: new Date(),
     marketplace: 'mercadolivre',
-    description: 'Smartphone premium com câmera avançada'
-  },
-  {
-    id: '2',
-    name: 'Fone Bluetooth Premium',
-    image: 'https://images.pexels.com/photos/3394650/pexels-photo-3394650.jpeg?auto=compress&cs=tinysrgb&w=300',
-    marketplaceUrl: 'https://mercadolivre.com.br/produto/2',
-    avgRating: 3.8,
-    totalReviews: 456,
-    recentReviews: 23,
-    trend: 'down',
-    category: 'Áudio',
-    price: 299.99,
-    lastAnalysis: new Date(),
-    marketplace: 'mercadolivre',
-    description: 'Fone sem fio com cancelamento de ruído'
-  },
-  {
-    id: '3',
-    name: 'Notebook Gaming Ultra',
-    image: 'https://images.pexels.com/photos/5380664/pexels-photo-5380664.jpeg?auto=compress&cs=tinysrgb&w=300',
-    marketplaceUrl: 'https://mercadolivre.com.br/produto/3',
-    avgRating: 4.7,
-    totalReviews: 789,
-    recentReviews: 45,
-    trend: 'up',
-    category: 'Computadores',
-    price: 3499.99,
-    lastAnalysis: new Date(),
-    marketplace: 'mercadolivre',
-    description: 'Notebook para jogos com placa de vídeo dedicada'
-  }
-];
+    description: mlProduct.description,
+    availableQuantity: mlProduct.available_quantity,
+    soldQuantity: mlProduct.sold_quantity,
+    condition: mlProduct.condition,
+    sellerId: mlProduct.seller_id,
+    categoryName: mlProduct.category_name
+  };
+};
 
-const mockReviews: Review[] = [
-  {
-    id: '1',
-    productId: '1',
-    rating: 5,
-    comment: 'Produto incrível! Chegou muito rápido e a qualidade é excelente. Recomendo!',
-    author: 'Maria Santos',
-    date: new Date('2024-01-15'),
-    sentiment: 'positive',
-    category: 'Qualidade',
-    keywords: ['qualidade', 'rápido', 'excelente'],
-    aiResponse: 'Olá Maria! Muito obrigado pelo seu feedback positivo! Ficamos felizes que tenha gostado da qualidade do produto e da rapidez na entrega. Sua recomendação é muito importante para nós! 😊'
-  },
-  {
-    id: '2',
-    productId: '1',
-    rating: 2,
-    comment: 'A embalagem chegou danificada e o produto tinha riscos. Decepcionado com a compra.',
-    author: 'João Oliveira',
-    date: new Date('2024-01-14'),
-    sentiment: 'negative',
-    category: 'Embalagem',
-    keywords: ['embalagem', 'danificada', 'riscos'],
-    isUrgent: true,
-    aiResponse: 'Olá João, sentimos muito pelo problema com a embalagem e os riscos no produto. Isso não condiz com nossos padrões de qualidade. Vamos entrar em contato para resolver esta situação rapidamente. Pode nos enviar fotos pelo chat? Faremos a troca imediatamente!'
-  }
-];
+// Função para converter MercadoLivreReview para Review
+const convertMercadoLivreReview = (mlReview: MercadoLivreReview): Review => {
+  return {
+    id: mlReview.id,
+    productId: mlReview.item_id,
+    rating: mlReview.rating,
+    comment: mlReview.comment,
+    author: mlReview.author.name,
+    date: new Date(mlReview.date),
+    sentiment: 'neutral', // Será analisado pelo serviço
+    category: 'Geral',
+    keywords: [],
+    isUrgent: false,
+    marketplace: 'mercadolivre'
+  };
+};
 
 // Função para gerar ID único
 const generateId = () => {
@@ -148,28 +125,46 @@ const generateId = () => {
 // Função para simular delay de API
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Função para extrair dados do produto da URL (simulação)
-const extractProductDataFromUrl = async (url: string): Promise<Partial<Product>> => {
-  // Simular extração de dados da URL
-  await delay(1000);
+// Função para calcular estatísticas de reviews
+const calculateReviewStats = (reviews: Review[], productId: string) => {
+  const productReviews = reviews.filter(r => r.productId === productId);
+  const totalReviews = productReviews.length;
+  const avgRating = totalReviews > 0 
+    ? productReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews 
+    : 0;
   
-  // Dados simulados baseados na URL
-  const mockData: Partial<Product> = {
-    avgRating: 4.0 + Math.random() * 1, // Rating entre 4.0 e 5.0
-    totalReviews: Math.floor(Math.random() * 1000) + 100, // Entre 100 e 1100 reviews
-    recentReviews: Math.floor(Math.random() * 50) + 10, // Entre 10 e 60 reviews recentes
-    trend: Math.random() > 0.5 ? 'up' : 'down',
-    lastAnalysis: new Date()
-  };
+  const recentReviews = productReviews.filter(r => {
+    const daysDiff = (Date.now() - r.date.getTime()) / (1000 * 60 * 60 * 24);
+    return daysDiff <= 7;
+  }).length;
 
-  return mockData;
+  return { totalReviews, avgRating, recentReviews };
 };
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(mockProducts);
-  const [reviews, setReviews] = useState<Review[]>(mockReviews);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Hook do Mercado Livre
+  const mercadoLivre = useMercadoLivre();
+
+  // Carregar dados do Mercado Livre quando conectar
+  useEffect(() => {
+    if (mercadoLivre.isConnected && mercadoLivre.products.length > 0) {
+      const convertedProducts = mercadoLivre.products.map(convertMercadoLivreProduct);
+      setProducts(convertedProducts);
+    }
+  }, [mercadoLivre.isConnected, mercadoLivre.products]);
+
+  // Carregar reviews do Mercado Livre
+  useEffect(() => {
+    if (mercadoLivre.reviews.length > 0) {
+      const convertedReviews = mercadoLivre.reviews.map(convertMercadoLivreReview);
+      setReviews(convertedReviews);
+    }
+  }, [mercadoLivre.reviews]);
 
   const getProductReviews = (productId: string) => {
     return reviews.filter(review => review.productId === productId);
@@ -190,41 +185,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('URL do produto inválida');
       }
 
-      // Simular extração de dados do marketplace
-      const extractedData = await extractProductDataFromUrl(productData.marketplaceUrl);
-      
-      // Criar novo produto
+      // Se for do Mercado Livre, tentar carregar dados reais
+      if (productData.marketplace === 'mercadolivre' && mercadoLivre.isConnected) {
+        // Extrair ID do produto da URL do Mercado Livre
+        const urlMatch = productData.marketplaceUrl.match(/\/produto\/([^\/\?]+)/);
+        if (urlMatch) {
+          const productId = urlMatch[1];
+          const mlProduct = await mercadoLivre.getProductDetails(productId);
+          if (mlProduct) {
+            const product = convertMercadoLivreProduct(mlProduct);
+            setProducts(prev => [...prev, product]);
+            setIsLoading(false);
+            return product;
+          }
+        }
+      }
+
+      // Criar produto com dados básicos
       const newProduct: Product = {
         id: generateId(),
         name: productData.name,
         category: productData.category,
         price: productData.price,
+        image: productData.image || 'https://via.placeholder.com/300x300?text=Produto',
         marketplaceUrl: productData.marketplaceUrl,
         marketplace: productData.marketplace,
-        image: productData.image || 'https://images.pexels.com/photos/607812/pexels-photo-607812.jpeg?auto=compress&cs=tinysrgb&w=300',
         description: productData.description,
-        ...extractedData,
-        avgRating: extractedData.avgRating || 0,
-        totalReviews: extractedData.totalReviews || 0,
-        recentReviews: extractedData.recentReviews || 0,
-        trend: extractedData.trend || 'stable',
+        avgRating: 0,
+        totalReviews: 0,
+        recentReviews: 0,
+        trend: 'stable',
         lastAnalysis: new Date()
       };
 
-      // Adicionar produto à lista
       setProducts(prev => [...prev, newProduct]);
-
-      // Simular geração de reviews iniciais
-      await delay(500);
-      const initialReviews = generateInitialReviews(newProduct.id, newProduct.totalReviews);
-      setReviews(prev => [...prev, ...initialReviews]);
-
+      setIsLoading(false);
       return newProduct;
     } catch (error) {
-      console.error('Erro ao adicionar produto:', error);
-      throw error;
-    } finally {
       setIsLoading(false);
+      throw error;
     }
   };
 
@@ -237,44 +236,78 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteProduct = (productId: string) => {
     setProducts(prev => prev.filter(product => product.id !== productId));
     setReviews(prev => prev.filter(review => review.productId !== productId));
-    
-    if (selectedProduct?.id === productId) {
-      setSelectedProduct(null);
+  };
+
+  const searchProducts = async (query: string): Promise<Product[]> => {
+    if (!mercadoLivre.isConnected) {
+      // Busca local se não estiver conectado
+      return products.filter(product => 
+        product.name.toLowerCase().includes(query.toLowerCase()) ||
+        product.category.toLowerCase().includes(query.toLowerCase())
+      );
+    }
+
+    try {
+      const searchResponse = await mercadoLivre.searchProducts(query, 20);
+      return searchResponse.results.map(convertMercadoLivreProduct);
+    } catch (error) {
+      console.error('Erro na busca de produtos:', error);
+      return [];
     }
   };
 
-  // Função para gerar reviews iniciais simuladas
-  const generateInitialReviews = (productId: string, totalCount: number): Review[] => {
-    const sampleComments = [
-      { comment: 'Produto excelente, recomendo!', sentiment: 'positive', rating: 5, author: 'Ana Silva' },
-      { comment: 'Boa qualidade pelo preço.', sentiment: 'positive', rating: 4, author: 'Carlos Santos' },
-      { comment: 'Produto ok, nada excepcional.', sentiment: 'neutral', rating: 3, author: 'Maria Oliveira' },
-      { comment: 'Chegou com defeito, tive que trocar.', sentiment: 'negative', rating: 2, author: 'João Costa' },
-      { comment: 'Entrega rápida e produto conforme descrito.', sentiment: 'positive', rating: 5, author: 'Paula Lima' }
-    ];
-
-    const reviewsToGenerate = Math.min(5, Math.floor(totalCount * 0.1)); // Gerar até 5 reviews ou 10% do total
-    const generatedReviews: Review[] = [];
-
-    for (let i = 0; i < reviewsToGenerate; i++) {
-      const sample = sampleComments[i % sampleComments.length];
-      const review: Review = {
-        id: generateId(),
-        productId,
-        rating: sample.rating,
-        comment: sample.comment,
-        author: sample.author,
-        date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000), // Últimos 30 dias
-        sentiment: sample.sentiment as 'positive' | 'negative' | 'neutral',
-        category: 'Geral',
-        keywords: sample.comment.toLowerCase().split(' ').filter(word => word.length > 3).slice(0, 3),
-        isUrgent: sample.sentiment === 'negative' && sample.rating <= 2
-      };
-
-      generatedReviews.push(review);
+  const loadProductFromMercadoLivre = async (productId: string): Promise<Product | null> => {
+    if (!mercadoLivre.isConnected) {
+      return null;
     }
 
-    return generatedReviews;
+    try {
+      const mlProduct = await mercadoLivre.getProductDetails(productId);
+      if (mlProduct) {
+        return convertMercadoLivreProduct(mlProduct);
+      }
+      return null;
+    } catch (error) {
+      console.error('Erro ao carregar produto do Mercado Livre:', error);
+      return null;
+    }
+  };
+
+  const syncMercadoLivreData = async (productIds: string[]): Promise<void> => {
+    if (!mercadoLivre.isConnected) {
+      throw new Error('Não conectado ao Mercado Livre');
+    }
+
+    setIsLoading(true);
+    try {
+      await mercadoLivre.syncData(productIds);
+      
+      // Atualizar produtos com dados do Mercado Livre
+      const convertedProducts = mercadoLivre.products.map(convertMercadoLivreProduct);
+      setProducts(convertedProducts);
+      
+      // Atualizar reviews com dados do Mercado Livre
+      const convertedReviews = mercadoLivre.reviews.map(convertMercadoLivreReview);
+      setReviews(convertedReviews);
+      
+      // Atualizar estatísticas dos produtos
+      const updatedProducts = convertedProducts.map(product => {
+        const stats = calculateReviewStats(convertedReviews, product.id);
+        return {
+          ...product,
+          avgRating: stats.avgRating,
+          totalReviews: stats.totalReviews,
+          recentReviews: stats.recentReviews
+        };
+      });
+      
+      setProducts(updatedProducts);
+    } catch (error) {
+      console.error('Erro na sincronização:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -288,7 +321,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addProduct,
       updateProduct,
       deleteProduct,
-      isLoading
+      searchProducts,
+      loadProductFromMercadoLivre,
+      syncMercadoLivreData,
+      isLoading: isLoading || mercadoLivre.isLoading,
+      mercadoLivreProducts: mercadoLivre.products,
+      mercadoLivreReviews: mercadoLivre.reviews
     }}>
       {children}
     </DataContext.Provider>

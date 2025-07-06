@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Filter, Star, TrendingUp, TrendingDown, ExternalLink, X, Save, Upload, Globe, ShoppingCart, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { Link } from 'react-router-dom';
+import { useMercadoLivre } from '../hooks/useMercadoLivre';
+import { formatCurrency } from '../utils/formatters';
 
 interface NewProductModal {
   isOpen: boolean;
@@ -23,9 +25,13 @@ interface FormErrors {
 }
 
 const Products: React.FC = () => {
-  const { products, addProduct, isLoading } = useData();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState('all');
+  const { products, addProduct, isLoading, searchProducts } = useData();
+  const { isConnected, loadProducts, loadCategories, categories } = useMercadoLivre();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'rating' | 'reviews'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [isSearching, setIsSearching] = useState(false);
   const [newProductModal, setNewProductModal] = useState<NewProductModal>({ isOpen: false });
   const [newProductForm, setNewProductForm] = useState<NewProductForm>({
     name: '',
@@ -40,48 +46,111 @@ const Products: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || product.category === filterCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // Carregar categorias ao inicializar
+  useEffect(() => {
+    if (isConnected) {
+      loadCategories();
+    }
+  }, [isConnected, loadCategories]);
 
-  const categories = [...new Set(products.map(p => p.category))];
+  // Carregar produtos em destaque se conectado
+  useEffect(() => {
+    if (isConnected && products.length === 0) {
+      loadProducts();
+    }
+  }, [isConnected, products.length, loadProducts]);
 
-  const marketplaces = [
-    { id: 'mercadolivre', name: 'Mercado Livre', icon: ShoppingCart },
-    { id: 'amazon', name: 'Amazon Brasil', icon: Globe },
-    { id: 'shopee', name: 'Shopee', icon: ShoppingCart },
-    { id: 'magazineluiza', name: 'Magazine Luiza', icon: ShoppingCart },
-    { id: 'americanas', name: 'Americanas', icon: ShoppingCart }
-  ];
-
-  const productCategories = [
-    'Eletrônicos',
-    'Áudio',
-    'Computadores',
-    'Casa e Jardim',
-    'Moda',
-    'Esportes',
-    'Livros',
-    'Beleza',
-    'Automotivo',
-    'Brinquedos'
-  ];
-
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case 'up': return <TrendingUp className="h-4 w-4 text-green-500" />;
-      case 'down': return <TrendingDown className="h-4 w-4 text-red-500" />;
-      default: return null;
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      if (isConnected) {
+        await loadProducts(searchQuery, selectedCategory);
+      } else {
+        // Busca local
+        await searchProducts(searchQuery);
+      }
+    } catch (error) {
+      console.error('Erro na busca:', error);
+    } finally {
+      setIsSearching(false);
     }
   };
 
-  const getTrendColor = (trend: string) => {
+  const handleCategoryChange = async (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    if (isConnected && categoryId) {
+      setIsSearching(true);
+      try {
+        await loadProducts(undefined, categoryId);
+      } catch (error) {
+        console.error('Erro ao carregar categoria:', error);
+      } finally {
+        setIsSearching(false);
+      }
+    }
+  };
+
+  const handleSort = (field: 'name' | 'price' | 'rating' | 'reviews') => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const sortedProducts = [...products].sort((a, b) => {
+    let aValue: any, bValue: any;
+    
+    switch (sortBy) {
+      case 'name':
+        aValue = a.name.toLowerCase();
+        bValue = b.name.toLowerCase();
+        break;
+      case 'price':
+        aValue = a.price;
+        bValue = b.price;
+        break;
+      case 'rating':
+        aValue = a.avgRating;
+        bValue = b.avgRating;
+        break;
+      case 'reviews':
+        aValue = a.totalReviews;
+        bValue = b.totalReviews;
+        break;
+      default:
+        return 0;
+    }
+    
+    if (sortOrder === 'asc') {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+
+  const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
     switch (trend) {
-      case 'up': return 'text-green-600 bg-green-50 border-green-200';
-      case 'down': return 'text-red-600 bg-red-50 border-red-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      case 'up':
+        return <TrendingUp className="h-4 w-4 text-green-500" />;
+      case 'down':
+        return <TrendingDown className="h-4 w-4 text-red-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getTrendText = (trend: 'up' | 'down' | 'stable') => {
+    switch (trend) {
+      case 'up':
+        return 'Crescendo';
+      case 'down':
+        return 'Diminuindo';
+      default:
+        return 'Estável';
     }
   };
 
@@ -220,173 +289,225 @@ const Products: React.FC = () => {
       className="space-y-6"
     >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-        >
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
-            Meus Produtos
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Produtos
           </h1>
           <p className="text-gray-600">
-            Gerencie e monitore seus produtos nos marketplaces
+            {isConnected ? 'Produtos do Mercado Livre' : 'Produtos cadastrados'}
           </p>
-        </motion.div>
-
-        <motion.button
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setNewProductModal({ isOpen: true })}
-          disabled={isLoading}
-          className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        </div>
+        
+        <Link
+          to="/produtos/novo"
+          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
-          <Plus className="h-5 w-5" />
-          <span>Adicionar Produto</span>
-        </motion.button>
+          <Plus className="h-4 w-4 mr-2" />
+          Adicionar Produto
+        </Link>
       </div>
 
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
-      >
-        <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
+      {/* Search and Filters */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Search */}
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar produtos..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50"
-            />
+          <div className="md:col-span-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar produtos..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           {/* Category Filter */}
-          <div className="flex items-center space-x-2">
-            <Filter className="h-5 w-5 text-gray-400" />
+          <div>
             <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/50"
+              value={selectedCategory}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="all">Todas as categorias</option>
-              {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
+              <option value="">Todas as categorias</option>
+              {categories.map((category: any) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
               ))}
             </select>
           </div>
+
+          {/* Search Button */}
+          <div>
+            <button
+              onClick={handleSearch}
+              disabled={isSearching || !searchQuery.trim()}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+            >
+              {isSearching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
-      </motion.div>
-
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProducts.map((product, index) => (
-          <motion.div
-            key={product.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
-          >
-            {/* Product Image */}
-            <div className="relative h-48 overflow-hidden">
-              <img
-                src={product.image}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute top-3 right-3">
-                <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getTrendColor(product.trend)}`}>
-                  {getTrendIcon(product.trend)}
-                  <span className="ml-1">
-                    {product.trend === 'up' ? 'Alta' : product.trend === 'down' ? 'Baixa' : 'Estável'}
-                  </span>
-                </span>
-              </div>
-            </div>
-
-            {/* Product Info */}
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
-                  {product.name}
-                </h3>
-                <a
-                  href={product.marketplaceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </div>
-
-              <div className="flex items-center space-x-2 mb-3">
-                <div className="flex items-center space-x-1">
-                  <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                  <span className="font-medium text-gray-900">
-                    {product.avgRating.toFixed(1)}
-                  </span>
-                </div>
-                <span className="text-sm text-gray-500">
-                  ({product.totalReviews} avaliações)
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-gray-600">
-                  {product.category}
-                </span>
-                <span className="text-lg font-bold text-gray-900">
-                  R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                <div className="text-center p-2 bg-blue-50 rounded-lg">
-                  <p className="font-medium text-blue-900">{product.recentReviews}</p>
-                  <p className="text-blue-600">Reviews recentes</p>
-                </div>
-                <div className="text-center p-2 bg-green-50 rounded-lg">
-                  <p className="font-medium text-green-900">
-                    {((product.avgRating / 5) * 100).toFixed(0)}%
-                  </p>
-                  <p className="text-green-600">Satisfação</p>
-                </div>
-              </div>
-
-              <Link
-                to={`/produtos/${product.id}`}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-lg font-medium hover:shadow-lg transition-all duration-200 text-center block"
-              >
-                Ver Detalhes
-              </Link>
-            </div>
-          </motion.div>
-        ))}
       </div>
 
-      {filteredProducts.length === 0 && (
+      {/* Connection Status */}
+      {!isConnected && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-12"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"
         >
-          <div className="h-24 w-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search className="h-12 w-12 text-gray-400" />
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="h-5 w-5 text-yellow-600" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800">
+                Não conectado ao Mercado Livre
+              </p>
+              <p className="text-sm text-yellow-700">
+                Conecte-se para buscar produtos reais e análises de reviews.
+              </p>
+            </div>
           </div>
+        </motion.div>
+      )}
+
+      {/* Sort Controls */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <span className="text-sm text-gray-600">Ordenar por:</span>
+          {[
+            { key: 'name', label: 'Nome' },
+            { key: 'price', label: 'Preço' },
+            { key: 'rating', label: 'Avaliação' },
+            { key: 'reviews', label: 'Reviews' }
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handleSort(key as any)}
+              className={`text-sm px-3 py-1 rounded-md transition-colors ${
+                sortBy === key
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {label}
+              {sortBy === key && (
+                <span className="ml-1">
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        
+        <span className="text-sm text-gray-600">
+          {sortedProducts.length} produto{sortedProducts.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Products Grid */}
+      {isLoading || isSearching ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      ) : sortedProducts.length === 0 ? (
+        <div className="text-center py-12">
+          <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             Nenhum produto encontrado
           </h3>
           <p className="text-gray-600">
-            Tente ajustar os filtros ou adicionar novos produtos
+            {searchQuery ? 'Tente ajustar sua busca ou filtros.' : 'Adicione produtos para começar.'}
           </p>
-        </motion.div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {sortedProducts.map((product, index) => (
+            <motion.div
+              key={product.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+            >
+              <Link to={`/produtos/${product.id}`}>
+                <div className="relative">
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-48 object-cover rounded-t-xl"
+                  />
+                  {product.marketplace === 'mercadolivre' && (
+                    <div className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">
+                      ML
+                    </div>
+                  )}
+                  <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                    {product.category}
+                  </div>
+                </div>
+                
+                <div className="p-4">
+                  <h3 className="font-medium text-gray-900 mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                    {product.name}
+                  </h3>
+                  
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-lg font-bold text-gray-900">
+                      {formatCurrency(product.price)}
+                    </span>
+                    <div className="flex items-center space-x-1">
+                      <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                      <span className="text-sm font-medium text-gray-700">
+                        {product.avgRating.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-sm text-gray-600">
+                    <span>{product.totalReviews} reviews</span>
+                    <div className="flex items-center space-x-1">
+                      {getTrendIcon(product.trend)}
+                      <span className={product.trend === 'up' ? 'text-green-600' : product.trend === 'down' ? 'text-red-600' : 'text-gray-600'}>
+                        {getTrendText(product.trend)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {product.marketplace === 'mercadolivre' && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>Disponível: {product.availableQuantity || 0}</span>
+                        <span>Vendidos: {product.soldQuantity || 0}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Link>
+              
+              <div className="px-4 pb-4">
+                <a
+                  href={product.marketplaceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  Ver no marketplace
+                  <ExternalLink className="h-3 w-3 ml-1" />
+                </a>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       )}
 
       {/* Add Product Modal */}
@@ -523,8 +644,8 @@ const Products: React.FC = () => {
                       }`}
                     >
                       <option value="">Selecione uma categoria</option>
-                      {productCategories.map(category => (
-                        <option key={category} value={category}>{category}</option>
+                      {categories.map(category => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
                       ))}
                     </select>
                     {formErrors.category && (
@@ -564,10 +685,8 @@ const Products: React.FC = () => {
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     >
                       <option value="">Selecione o marketplace</option>
-                      {marketplaces.map(marketplace => (
-                        <option key={marketplace.id} value={marketplace.id}>
-                          {marketplace.name}
-                        </option>
+                      {['mercadolivre', 'amazon', 'shopee', 'magazineluiza', 'americanas'].map(marketplace => (
+                        <option key={marketplace} value={marketplace}>{marketplace.charAt(0).toUpperCase() + marketplace.slice(1)}</option>
                       ))}
                     </select>
                   </div>
