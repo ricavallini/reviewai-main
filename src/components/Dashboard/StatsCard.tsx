@@ -1,61 +1,75 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { DivideIcon as LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface StatsCardProps {
   title: string;
-  value: string;
-  change: string;
-  trend: 'up' | 'down';
-  icon: LucideIcon;
-  color: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
+  value: string | number;
+  change?: number;
+  changeType?: 'increase' | 'decrease' | 'neutral';
+  icon: React.ComponentType<any>;
+  color: 'blue' | 'green' | 'purple' | 'orange' | 'red';
+  description?: string;
 }
 
 const StatsCard: React.FC<StatsCardProps> = ({
   title,
   value,
   change,
-  trend,
+  changeType = 'neutral',
   icon: Icon,
-  color
+  color,
+  description
 }) => {
-  const colorClasses = {
-    blue: 'bg-blue-500 text-blue-600 bg-blue-50',
-    green: 'bg-green-500 text-green-600 bg-green-50',
-    yellow: 'bg-yellow-500 text-yellow-600 bg-yellow-50',
-    red: 'bg-red-500 text-red-600 bg-red-50',
-    purple: 'bg-purple-500 text-purple-600 bg-purple-50'
+  const getColorClasses = (color: string) => {
+    const colors: Record<string, string> = {
+      blue: 'bg-blue-500 text-blue-600 bg-blue-50',
+      green: 'bg-green-500 text-green-600 bg-green-50',
+      purple: 'bg-purple-500 text-purple-600 bg-purple-50',
+      orange: 'bg-orange-500 text-orange-600 bg-orange-50',
+      red: 'bg-red-500 text-red-600 bg-red-50'
+    };
+    return colors[color] || colors.blue;
   };
 
-  const [bgColor, textColor, lightBg] = colorClasses[color].split(' ');
+  const getChangeColor = (type: string) => {
+    switch (type) {
+      case 'increase': return 'text-green-600';
+      case 'decrease': return 'text-red-600';
+      default: return 'text-gray-600';
+    }
+  };
+
+  const getChangeIcon = (type: string) => {
+    switch (type) {
+      case 'increase': return '↗';
+      case 'decrease': return '↘';
+      default: return '→';
+    }
+  };
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02, y: -2 }}
-      className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
     >
       <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mb-2">{value}</p>
-          
-          <div className="flex items-center space-x-1">
-            {trend === 'up' ? (
-              <TrendingUp className="h-4 w-4 text-green-500" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-500" />
-            )}
-            <span className={`text-sm font-medium ${
-              trend === 'up' ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {change}
-            </span>
-            <span className="text-sm text-gray-500">vs mês anterior</span>
-          </div>
+        <div>
+          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {description && (
+            <p className="text-xs text-gray-500 mt-1">{description}</p>
+          )}
+          {change !== undefined && (
+            <div className={`flex items-center space-x-1 mt-2 ${getChangeColor(changeType)}`}>
+              <span className="text-sm font-medium">{getChangeIcon(changeType)}</span>
+              <span className="text-sm">{Math.abs(change)}%</span>
+              <span className="text-xs">vs mês anterior</span>
+            </div>
+          )}
         </div>
-
-        <div className={`h-12 w-12 ${lightBg} rounded-lg flex items-center justify-center`}>
-          <Icon className={`h-6 w-6 ${textColor}`} />
+        <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${getColorClasses(color)}`}>
+          <Icon className="h-6 w-6" />
         </div>
       </div>
     </motion.div>

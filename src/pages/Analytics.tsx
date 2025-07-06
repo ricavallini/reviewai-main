@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   TrendingUp, 
@@ -18,6 +18,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
+import { useData } from '../contexts/DataContext';
 
 interface ExportModal {
   isOpen: boolean;
@@ -33,6 +34,7 @@ interface ExportOptions {
 }
 
 const Analytics: React.FC = () => {
+  const { analytics } = useData();
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [selectedMetric, setSelectedMetric] = useState('sentiment');
   const [exportModal, setExportModal] = useState<ExportModal>({ isOpen: false });
@@ -45,37 +47,43 @@ const Analytics: React.FC = () => {
     email: ''
   });
 
-  // Mock data for charts
-  const sentimentData = [
-    { month: 'Jan', positive: 65, neutral: 20, negative: 15 },
-    { month: 'Fev', positive: 70, neutral: 18, negative: 12 },
-    { month: 'Mar', positive: 68, neutral: 22, negative: 10 },
-    { month: 'Abr', positive: 72, neutral: 19, negative: 9 },
-    { month: 'Mai', positive: 75, neutral: 17, negative: 8 },
-    { month: 'Jun', positive: 73, neutral: 20, negative: 7 }
-  ];
+  // Dados reais do analytics
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const ratingDistribution = [
-    { rating: '5 estrelas', count: 450, percentage: 45 },
-    { rating: '4 estrelas', count: 300, percentage: 30 },
-    { rating: '3 estrelas', count: 150, percentage: 15 },
-    { rating: '2 estrelas', count: 70, percentage: 7 },
-    { rating: '1 estrela', count: 30, percentage: 3 }
-  ];
+  // Carregar dados de analytics
+  useEffect(() => {
+    const loadAnalyticsData = async () => {
+      setIsLoading(true);
+      try {
+        const data = analytics.generateReport(selectedPeriod as '7d' | '30d' | '90d' | '1y');
+        setAnalyticsData(data);
+      } catch (error) {
+        console.error('Erro ao carregar dados de analytics:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const keywordData = [
-    { keyword: 'qualidade', mentions: 234, sentiment: 'positive' },
-    { keyword: 'entrega', mentions: 189, sentiment: 'positive' },
-    { keyword: 'preço', mentions: 156, sentiment: 'neutral' },
-    { keyword: 'embalagem', mentions: 98, sentiment: 'negative' },
-    { keyword: 'atendimento', mentions: 87, sentiment: 'positive' }
-  ];
+    loadAnalyticsData();
+  }, [selectedPeriod, analytics]);
 
-  const pieData = [
-    { name: 'Positivo', value: 73, color: '#10B981' },
-    { name: 'Neutro', value: 20, color: '#F59E0B' },
-    { name: 'Negativo', value: 7, color: '#EF4444' }
-  ];
+  // Dados para gráficos baseados em analytics reais
+  const sentimentData = analyticsData?.trends || [];
+  const ratingDistribution = analyticsData?.analytics?.ratingDistribution ? 
+    Object.entries(analyticsData.analytics.ratingDistribution).map(([rating, count]: [string, any]) => ({
+      rating: `${rating} estrelas`,
+      count,
+      percentage: analyticsData.analytics.metrics.totalReviews > 0 ? 
+        (count / analyticsData.analytics.metrics.totalReviews) * 100 : 0
+    })) : [];
+
+  const keywordData = analyticsData?.analytics?.keywords || [];
+  const pieData = analyticsData?.analytics?.sentimentDistribution ? [
+    { name: 'Positivo', value: analyticsData.analytics.sentimentDistribution.positive, color: '#10B981' },
+    { name: 'Neutro', value: analyticsData.analytics.sentimentDistribution.neutral, color: '#F59E0B' },
+    { name: 'Negativo', value: analyticsData.analytics.sentimentDistribution.negative, color: '#EF4444' }
+  ] : [];
 
   const handleExportOptionChange = (field: keyof ExportOptions, value: any) => {
     setExportOptions(prev => ({
@@ -84,44 +92,56 @@ const Analytics: React.FC = () => {
     }));
   };
 
-  const handleExport = () => {
-    // Simular processo de exportação
-    console.log('Exportando com opções:', exportOptions);
-    
-    // Simular download
-    const filename = `analytics-report-${exportOptions.period}.${exportOptions.format}`;
-    
-    // Criar um blob simulado para download
-    const content = `Relatório de Analytics - ${exportOptions.period}\n\nDados exportados em ${new Date().toLocaleString('pt-BR')}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    // Fechar modal
-    setExportModal({ isOpen: false });
-    
-    // Mostrar mensagem de sucesso
-    alert('Relatório exportado com sucesso!');
+  const handleExport = async () => {
+    try {
+      await analytics.exportReport(exportOptions);
+      setExportModal({ isOpen: false });
+    } catch (error) {
+      console.error('Erro ao exportar relatório:', error);
+      alert('Erro ao exportar relatório');
+    }
   };
 
-  const handleEmailReport = () => {
+  const handleEmailReport = async () => {
     if (!exportOptions.email) {
       alert('Por favor, insira um e-mail válido.');
       return;
     }
     
-    // Simular envio por e-mail
-    console.log('Enviando relatório por e-mail para:', exportOptions.email);
-    alert(`Relatório enviado para ${exportOptions.email}!`);
-    setExportModal({ isOpen: false });
+    try {
+      await analytics.sendReportByEmail(exportOptions);
+      setExportModal({ isOpen: false });
+      alert(`Relatório enviado para ${exportOptions.email}!`);
+    } catch (error) {
+      console.error('Erro ao enviar relatório:', error);
+      alert('Erro ao enviar relatório por email');
+    }
   };
+
+  // Métricas calculadas
+  const metrics = analyticsData?.analytics?.metrics || {
+    totalReviews: 0,
+    averageRating: 0,
+    responseRate: 0,
+    satisfactionScore: 0,
+    growthRate: 0
+  };
+
+  const keyMetrics = [
+    { title: 'Satisfação Geral', value: `${metrics.satisfactionScore.toFixed(1)}%`, change: '+5%', icon: Star, color: 'yellow' },
+    { title: 'Total de Reviews', value: metrics.totalReviews.toLocaleString(), change: '+12%', icon: MessageSquare, color: 'blue' },
+    { title: 'Engajamento', value: `${metrics.responseRate.toFixed(1)}%`, change: '+8%', icon: Users, color: 'green' },
+    { title: 'Taxa de Resposta', value: `${metrics.responseRate.toFixed(1)}%`, change: '+3%', icon: Target, color: 'purple' }
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-gray-600">Carregando analytics...</span>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -173,12 +193,7 @@ const Analytics: React.FC = () => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: 'Satisfação Geral', value: '87%', change: '+5%', icon: Star, color: 'yellow' },
-          { title: 'Total de Reviews', value: '2,847', change: '+12%', icon: MessageSquare, color: 'blue' },
-          { title: 'Engajamento', value: '94%', change: '+8%', icon: Users, color: 'green' },
-          { title: 'Taxa de Resposta', value: '96%', change: '+3%', icon: Target, color: 'purple' }
-        ].map((metric, index) => (
+        {keyMetrics.map((metric, index) => (
           <motion.div
             key={metric.title}
             initial={{ opacity: 0, y: 20 }}
@@ -231,7 +246,7 @@ const Analytics: React.FC = () => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={sentimentData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" stroke="#6b7280" />
+                <XAxis dataKey="period" stroke="#6b7280" />
                 <YAxis stroke="#6b7280" />
                 <Tooltip 
                   contentStyle={{
@@ -277,7 +292,7 @@ const Analytics: React.FC = () => {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value) => [`${value}%`, 'Percentual']}
+                  formatter={(value) => [`${value}`, 'Quantidade']}
                   contentStyle={{
                     backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     border: 'none',
@@ -298,7 +313,7 @@ const Analytics: React.FC = () => {
                     style={{ backgroundColor: item.color }}
                   />
                   <span className="text-sm font-medium text-gray-900">
-                    {item.value}%
+                    {item.value}
                   </span>
                 </div>
                 <p className="text-xs text-gray-600">{item.name}</p>
@@ -406,33 +421,48 @@ const Analytics: React.FC = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white/60 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-2">📈 Tendência Positiva</h4>
-            <p className="text-sm text-gray-700">
-              Aumento de 15% em avaliações positivas relacionadas à "qualidade do produto" nos últimos 30 dias.
-            </p>
-          </div>
-          
-          <div className="bg-white/60 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-2">⚠️ Ponto de Atenção</h4>
-            <p className="text-sm text-gray-700">
-              Reclamações sobre "embalagem" aumentaram 8%. Considere revisar o processo de empacotamento.
-            </p>
-          </div>
-          
-          <div className="bg-white/60 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-2">💡 Oportunidade</h4>
-            <p className="text-sm text-gray-700">
-              Clientes elogiam o "atendimento". Use isso como diferencial competitivo em suas campanhas.
-            </p>
-          </div>
-          
-          <div className="bg-white/60 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-2">🎯 Recomendação</h4>
-            <p className="text-sm text-gray-700">
-              85% das respostas automáticas foram bem recebidas. Continue usando o tom empático atual.
-            </p>
-          </div>
+          {analyticsData?.analytics?.insights?.slice(0, 4).map((insight: any, index: number) => (
+            <div key={index} className="bg-white/60 rounded-lg p-4">
+              <h4 className="font-medium text-gray-900 mb-2">
+                {insight.type === 'positive' ? '📈' : 
+                 insight.type === 'negative' ? '⚠️' : 
+                 insight.type === 'opportunity' ? '💡' : '🎯'} {insight.title}
+              </h4>
+              <p className="text-sm text-gray-700">
+                {insight.description}
+              </p>
+            </div>
+          )) || (
+            <>
+              <div className="bg-white/60 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-2">📈 Tendência Positiva</h4>
+                <p className="text-sm text-gray-700">
+                  Aumento de 15% em avaliações positivas relacionadas à "qualidade do produto" nos últimos 30 dias.
+                </p>
+              </div>
+              
+              <div className="bg-white/60 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-2">⚠️ Ponto de Atenção</h4>
+                <p className="text-sm text-gray-700">
+                  Reclamações sobre "embalagem" aumentaram 8%. Considere revisar o processo de empacotamento.
+                </p>
+              </div>
+              
+              <div className="bg-white/60 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-2">💡 Oportunidade</h4>
+                <p className="text-sm text-gray-700">
+                  Clientes elogiam o "atendimento". Use isso como diferencial competitivo em suas campanhas.
+                </p>
+              </div>
+              
+              <div className="bg-white/60 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-2">🎯 Recomendação</h4>
+                <p className="text-sm text-gray-700">
+                  85% das respostas automáticas foram bem recebidas. Continue usando o tom empático atual.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </motion.div>
 

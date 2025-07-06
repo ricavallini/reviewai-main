@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   FileText, 
@@ -14,17 +14,37 @@ import {
   Users,
   Clock,
   Mail,
-  Share2
+  Share2,
+  Plus,
+  X,
+  Loader2,
+  CheckCircle
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const Reports: React.FC = () => {
-  const { products, reviews } = useData();
+  const { reports } = useData();
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [selectedProduct, setSelectedProduct] = useState('all');
   const [reportType, setReportType] = useState('complete');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [availableReports, setAvailableReports] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+
+  // Carregar templates e relatórios existentes
+  useEffect(() => {
+    const loadData = () => {
+      const reportTemplates = reports.getTemplates();
+      const existingReports = reports.getReports();
+      
+      setTemplates(reportTemplates);
+      setAvailableReports(existingReports);
+    };
+
+    loadData();
+  }, [reports]);
 
   const reportTypes = [
     { id: 'complete', name: 'Relatório Completo', description: 'Análise detalhada de todos os aspectos' },
@@ -42,69 +62,78 @@ const Reports: React.FC = () => {
     { id: 'custom', name: 'Período personalizado' }
   ];
 
-  const mockReports = [
-    {
-      id: '1',
-      title: 'Relatório Mensal - Janeiro 2024',
-      type: 'Completo',
-      period: 'Janeiro 2024',
-      products: 3,
-      reviews: 1250,
-      avgRating: 4.2,
-      createdAt: new Date('2024-01-31'),
-      status: 'ready',
-      insights: [
-        'Aumento de 15% em avaliações positivas',
-        '3 produtos com tendência de alta',
-        'Redução de 8% em reclamações sobre entrega'
-      ]
-    },
-    {
-      id: '2',
-      title: 'Análise de Sentimento - Dezembro 2023',
-      type: 'Sentimento',
-      period: 'Dezembro 2023',
-      products: 3,
-      reviews: 1180,
-      avgRating: 4.0,
-      createdAt: new Date('2023-12-31'),
-      status: 'ready',
-      insights: [
-        'Sentimento geral melhorou 12%',
-        'Palavras positivas aumentaram 20%',
-        'Críticas sobre preço diminuíram'
-      ]
-    },
-    {
-      id: '3',
-      title: 'Relatório Semanal - Semana 4',
-      type: 'Tendências',
-      period: '22-28 Jan 2024',
-      products: 3,
-      reviews: 89,
-      avgRating: 4.3,
-      createdAt: new Date('2024-01-28'),
-      status: 'processing',
-      insights: []
+  const handleGenerateReport = async () => {
+    setIsGenerating(true);
+    try {
+      const templateId = reportType;
+      const period = selectedPeriod as '7d' | '30d' | '90d' | '1y';
+      
+      const newReport = await reports.generateReport(templateId, period);
+      
+      // Recarregar relatórios
+      const updatedReports = reports.getReports();
+      setAvailableReports(updatedReports);
+      
+      alert('Relatório gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar relatório:', error);
+      alert('Erro ao gerar relatório');
+    } finally {
+      setIsGenerating(false);
     }
-  ];
+  };
 
-  const getStatusColor = (status: string) => {
+  const handleExportReport = async (reportId: string, format: 'pdf' | 'excel' | 'csv') => {
+    try {
+      await reports.exportReport(reportId, format);
+    } catch (error) {
+      console.error('Erro ao exportar relatório:', error);
+      alert('Erro ao exportar relatório');
+    }
+  };
+
+  const handleDeleteReport = (reportId: string) => {
+    if (confirm('Tem certeza que deseja excluir este relatório?')) {
+      reports.deleteReport(reportId);
+      const updatedReports = reports.getReports();
+      setAvailableReports(updatedReports);
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'ready': return 'text-green-600 bg-green-100 border-green-200';
-      case 'processing': return 'text-yellow-600 bg-yellow-100 border-yellow-200';
-      case 'error': return 'text-red-600 bg-red-100 border-red-200';
-      default: return 'text-gray-600 bg-gray-100 border-gray-200';
+      case 'ready':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'processing':
+        return <Loader2 className="h-4 w-4 text-yellow-500 animate-spin" />;
+      case 'failed':
+        return <AlertTriangle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-gray-500" />;
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'ready': return 'Pronto';
-      case 'processing': return 'Processando';
-      case 'error': return 'Erro';
-      default: return 'Pendente';
+      case 'ready':
+        return 'Pronto';
+      case 'processing':
+        return 'Processando...';
+      case 'failed':
+        return 'Falhou';
+      default:
+        return 'Aguardando';
     }
+  };
+
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   };
 
   return (
@@ -123,7 +152,7 @@ const Reports: React.FC = () => {
             Relatórios
           </h1>
           <p className="text-gray-600">
-            Gere e baixe relatórios detalhados das suas análises
+            Gere relatórios detalhados e personalizados dos seus dados
           </p>
         </motion.div>
 
@@ -132,30 +161,37 @@ const Reports: React.FC = () => {
           animate={{ opacity: 1, x: 0 }}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center space-x-2"
+          onClick={handleGenerateReport}
+          disabled={isGenerating}
+          className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center space-x-2 disabled:opacity-50"
         >
-          <FileText className="h-5 w-5" />
-          <span>Novo Relatório</span>
+          {isGenerating ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Plus className="h-5 w-5" />
+          )}
+          <span>{isGenerating ? 'Gerando...' : 'Novo Relatório'}</span>
         </motion.button>
       </div>
 
-      {/* Report Generator */}
+      {/* Generate Report Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
         className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
       >
         <h3 className="text-lg font-semibold text-gray-900 mb-6">
           Gerar Novo Relatório
         </h3>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Report Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Tipo de Relatório
             </label>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {reportTypes.map((type) => (
                 <label key={type.id} className="flex items-start space-x-3 cursor-pointer">
                   <input
@@ -167,80 +203,49 @@ const Reports: React.FC = () => {
                     className="mt-1 text-blue-600 focus:ring-blue-500"
                   />
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{type.name}</p>
-                    <p className="text-xs text-gray-600">{type.description}</p>
+                    <p className="font-medium text-gray-900">{type.name}</p>
+                    <p className="text-sm text-gray-600">{type.description}</p>
                   </div>
                 </label>
               ))}
             </div>
           </div>
 
-          {/* Period Selection */}
+          {/* Period */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Período
             </label>
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/50 mb-4"
-            >
+            <div className="space-y-3">
               {periods.map((period) => (
-                <option key={period.id} value={period.id}>
-                  {period.name}
-                </option>
+                <label key={period.id} className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="period"
+                    value={period.id}
+                    checked={selectedPeriod === period.id}
+                    onChange={(e) => setSelectedPeriod(e.target.value)}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-900">{period.name}</span>
+                </label>
               ))}
-            </select>
+            </div>
+          </div>
 
+          {/* Product Filter */}
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Produtos
+              Produto (Opcional)
             </label>
             <select
               value={selectedProduct}
               onChange={(e) => setSelectedProduct(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="all">Todos os produtos</option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
+              <option value="specific">Produto específico</option>
             </select>
-          </div>
-
-          {/* Preview */}
-          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
-            <h4 className="font-medium text-gray-900 mb-3">Prévia do Relatório</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Tipo:</span>
-                <span className="font-medium">
-                  {reportTypes.find(t => t.id === reportType)?.name}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Período:</span>
-                <span className="font-medium">
-                  {periods.find(p => p.id === selectedPeriod)?.name}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Produtos:</span>
-                <span className="font-medium">
-                  {selectedProduct === 'all' ? 'Todos' : '1 produto'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Reviews:</span>
-                <span className="font-medium">~{reviews.length}</span>
-              </div>
-            </div>
-
-            <button className="w-full mt-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center space-x-2">
-              <Download className="h-4 w-4" />
-              <span>Gerar Relatório</span>
-            </button>
           </div>
         </div>
       </motion.div>
@@ -249,7 +254,7 @@ const Reports: React.FC = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+        transition={{ delay: 0.2 }}
         className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
       >
         <div className="flex items-center justify-between mb-6">
@@ -268,89 +273,107 @@ const Reports: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          {mockReports.map((report, index) => (
-            <motion.div
-              key={report.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="border border-gray-100 rounded-lg p-4 hover:shadow-sm transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <h4 className="font-medium text-gray-900">{report.title}</h4>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(report.status)}`}>
-                      {getStatusText(report.status)}
-                    </span>
+          {availableReports.length > 0 ? (
+            availableReports.map((report, index) => (
+              <motion.div
+                key={report.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 + index * 0.1 }}
+                className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <h4 className="font-semibold text-gray-900">
+                        {report.name}
+                      </h4>
+                      <div className="flex items-center space-x-1">
+                        {getStatusIcon(report.status)}
+                        <span className="text-sm text-gray-600">
+                          {getStatusText(report.status)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <p><strong>Tipo:</strong> {reportTypes.find(t => t.id === report.type)?.name || report.type}</p>
+                      <p><strong>Período:</strong> {periods.find(p => p.id === report.period)?.name || report.period}</p>
+                      <p><strong>Criado em:</strong> {formatDate(report.createdAt)}</p>
+                      {report.completedAt && (
+                        <p><strong>Concluído em:</strong> {formatDate(report.completedAt)}</p>
+                      )}
+                    </div>
+                    
+                    {report.insights && report.insights.length > 0 && (
+                      <div className="bg-blue-50 rounded-lg p-3 mt-3">
+                        <p className="text-sm font-medium text-blue-900 mb-2">Principais Insights:</p>
+                        <ul className="text-sm text-blue-800 space-y-1">
+                          {report.insights.slice(0, 3).map((insight: any, i: number) => (
+                            <li key={i} className="flex items-start space-x-2">
+                              <span className="text-blue-600 mt-1">•</span>
+                              <span>{insight.title}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center space-x-4 text-sm text-gray-600 mb-2">
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>{report.period}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <BarChart3 className="h-4 w-4" />
-                      <span>{report.products} produtos</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <MessageSquare className="h-4 w-4" />
-                      <span>{report.reviews} reviews</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Star className="h-4 w-4" />
-                      <span>{report.avgRating.toFixed(1)} média</span>
-                    </div>
+
+                  <div className="flex items-center space-x-2 ml-4">
+                    {report.status === 'ready' && (
+                      <>
+                        <button 
+                          onClick={() => handleExportReport(report.id, 'pdf')}
+                          className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Baixar PDF"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleExportReport(report.id, 'excel')}
+                          className="p-2 text-gray-400 hover:text-green-600 transition-colors"
+                          title="Baixar Excel"
+                        >
+                          <BarChart3 className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleExportReport(report.id, 'csv')}
+                          className="p-2 text-gray-400 hover:text-purple-600 transition-colors"
+                          title="Baixar CSV"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                    {report.status === 'processing' && (
+                      <div className="flex items-center space-x-2 text-yellow-600">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Processando...</span>
+                      </div>
+                    )}
+                    <button 
+                      onClick={() => handleDeleteReport(report.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                      title="Excluir relatório"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                  
-                  {report.insights.length > 0 && (
-                    <div className="bg-blue-50 rounded-lg p-3 mt-3">
-                      <p className="text-sm font-medium text-blue-900 mb-2">Principais Insights:</p>
-                      <ul className="text-sm text-blue-800 space-y-1">
-                        {report.insights.map((insight, i) => (
-                          <li key={i} className="flex items-start space-x-2">
-                            <span className="text-blue-600 mt-1">•</span>
-                            <span>{insight}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </div>
-
-                <div className="flex items-center space-x-2 ml-4">
-                  {report.status === 'ready' && (
-                    <>
-                      <button className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
-                        <Download className="h-4 w-4" />
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-green-600 transition-colors">
-                        <Mail className="h-4 w-4" />
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-purple-600 transition-colors">
-                        <Share2 className="h-4 w-4" />
-                      </button>
-                    </>
-                  )}
-                  {report.status === 'processing' && (
-                    <div className="flex items-center space-x-2 text-yellow-600">
-                      <Clock className="h-4 w-4 animate-spin" />
-                      <span className="text-sm">Processando...</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>
-                  Criado em {format(report.createdAt, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                </span>
-                <span className="text-blue-600 font-medium">
-                  {report.type}
-                </span>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            ))
+          ) : (
+            <div className="text-center py-8">
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Nenhum relatório encontrado
+              </h3>
+              <p className="text-gray-600">
+                Gere seu primeiro relatório para começar a analisar seus dados
+              </p>
+            </div>
+          )}
         </div>
       </motion.div>
 
@@ -358,80 +381,35 @@ const Reports: React.FC = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
+        transition={{ delay: 0.3 }}
+        className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-200"
       >
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">
-          Templates de Relatório
-        </h3>
-
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+            <FileText className="h-5 w-5 text-white" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Templates de Relatório
+          </h3>
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            {
-              name: 'Relatório Executivo',
-              description: 'Resumo para tomada de decisões',
-              icon: TrendingUp,
-              color: 'blue'
-            },
-            {
-              name: 'Análise Detalhada',
-              description: 'Relatório completo com todos os dados',
-              icon: BarChart3,
-              color: 'green'
-            },
-            {
-              name: 'Comparativo Mensal',
-              description: 'Evolução mês a mês',
-              icon: PieChart,
-              color: 'purple'
-            },
-            {
-              name: 'Relatório de Crise',
-              description: 'Foco em problemas críticos',
-              icon: AlertTriangle,
-              color: 'red'
-            },
-            {
-              name: 'Satisfação do Cliente',
-              description: 'Métricas de satisfação',
-              icon: Users,
-              color: 'yellow'
-            },
-            {
-              name: 'Palavras-chave',
-              description: 'Termos mais mencionados',
-              icon: MessageSquare,
-              color: 'indigo'
-            }
-          ].map((template, index) => {
-            const colorClasses = {
-              blue: 'bg-blue-50 text-blue-600 border-blue-200',
-              green: 'bg-green-50 text-green-600 border-green-200',
-              purple: 'bg-purple-50 text-purple-600 border-purple-200',
-              red: 'bg-red-50 text-red-600 border-red-200',
-              yellow: 'bg-yellow-50 text-yellow-600 border-yellow-200',
-              indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200'
-            };
-
-            return (
-              <motion.div
-                key={template.name}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className={`border rounded-lg p-4 cursor-pointer hover:shadow-sm transition-all ${colorClasses[template.color]}`}
-              >
-                <div className="flex items-center space-x-3 mb-3">
-                  <template.icon className="h-6 w-6" />
-                  <h4 className="font-medium text-gray-900">{template.name}</h4>
-                </div>
-                <p className="text-sm text-gray-600 mb-3">{template.description}</p>
-                <button className="text-sm font-medium hover:underline">
-                  Usar Template
-                </button>
-              </motion.div>
-            );
-          })}
+          {templates.map((template, index) => (
+            <motion.div
+              key={template.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 + index * 0.1 }}
+              className="bg-white/60 rounded-lg p-4 border border-blue-200"
+            >
+              <h4 className="font-medium text-gray-900 mb-2">{template.name}</h4>
+              <p className="text-sm text-gray-700 mb-3">{template.description}</p>
+              <div className="text-xs text-gray-600">
+                <p><strong>Período padrão:</strong> {template.defaultPeriod}</p>
+                <p><strong>Seções:</strong> {template.sections.length}</p>
+              </div>
+            </motion.div>
+          ))}
         </div>
       </motion.div>
     </motion.div>

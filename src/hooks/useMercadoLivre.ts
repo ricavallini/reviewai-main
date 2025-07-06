@@ -39,7 +39,7 @@ interface MercadoLivreState {
   reviews: MercadoLivreReview[];
   stats: MercadoLivreStats;
   searchResults: SearchResponse | null;
-  categories: any[];
+  categories: Array<{ id: string; name: string }>;
 }
 
 const initialState: MercadoLivreState = {

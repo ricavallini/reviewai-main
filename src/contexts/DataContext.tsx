@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useMercadoLivre } from '../hooks/useMercadoLivre';
 import { MercadoLivreProduct, MercadoLivreReview } from '../services/mercadolivre';
+import { analyticsService } from '../services/analytics';
+import { alertService } from '../services/alerts';
+import { reportService } from '../services/reports';
 
 export interface Review {
   id: string;
@@ -62,6 +65,9 @@ interface DataContextType {
   loadProductFromMercadoLivre: (productId: string) => Promise<Product | null>;
   syncMercadoLivreData: (productIds: string[]) => Promise<void>;
   isLoading: boolean;
+  analytics: any;
+  alerts: any;
+  reports: any;
   mercadoLivreProducts: MercadoLivreProduct[];
   mercadoLivreReviews: MercadoLivreReview[];
 }
@@ -166,6 +172,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [mercadoLivre.reviews]);
 
+  // Configurar serviços com dados reais
+  useEffect(() => {
+    analyticsService.setData(reviews, products);
+    reportService.setData(products, reviews);
+    
+    // Processar alertas para novas reviews
+    reviews.forEach(review => {
+      const product = products.find(p => p.id === review.productId);
+      if (product) {
+        alertService.processReview(review, product);
+      }
+    });
+  }, [reviews, products]);
+
   const getProductReviews = (productId: string) => {
     return reviews.filter(review => review.productId === productId);
   };
@@ -188,7 +208,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Se for do Mercado Livre, tentar carregar dados reais
       if (productData.marketplace === 'mercadolivre' && mercadoLivre.isConnected) {
         // Extrair ID do produto da URL do Mercado Livre
-        const urlMatch = productData.marketplaceUrl.match(/\/produto\/([^\/\?]+)/);
+        const urlMatch = productData.marketplaceUrl.match(/\/produto\/([^/?]+)/);
         if (urlMatch) {
           const productId = urlMatch[1];
           const mlProduct = await mercadoLivre.getProductDetails(productId);
@@ -273,41 +293,72 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const syncMercadoLivreData = async (productIds: string[]): Promise<void> => {
+  const syncMercadoLivreData = async (productIds: string[]) => {
     if (!mercadoLivre.isConnected) {
       throw new Error('Não conectado ao Mercado Livre');
     }
 
     setIsLoading(true);
     try {
-      await mercadoLivre.syncData(productIds);
-      
-      // Atualizar produtos com dados do Mercado Livre
-      const convertedProducts = mercadoLivre.products.map(convertMercadoLivreProduct);
-      setProducts(convertedProducts);
-      
-      // Atualizar reviews com dados do Mercado Livre
+      // Sincronizar produtos
+      for (const productId of productIds) {
+        const mlProduct = await mercadoLivre.getProductDetails(productId);
+        if (mlProduct) {
+          const product = convertMercadoLivreProduct(mlProduct);
+          updateProduct(productId, product);
+        }
+      }
+
+      // Sincronizar reviews - usar reviews já carregadas
       const convertedReviews = mercadoLivre.reviews.map(convertMercadoLivreReview);
       setReviews(convertedReviews);
-      
-      // Atualizar estatísticas dos produtos
-      const updatedProducts = convertedProducts.map(product => {
-        const stats = calculateReviewStats(convertedReviews, product.id);
-        return {
-          ...product,
-          avgRating: stats.avgRating,
-          totalReviews: stats.totalReviews,
-          recentReviews: stats.recentReviews
-        };
-      });
-      
-      setProducts(updatedProducts);
     } catch (error) {
       console.error('Erro na sincronização:', error);
       throw error;
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Serviços integrados
+  const analytics = {
+    getSentimentDistribution: () => analyticsService.getSentimentDistribution(),
+    getRatingDistribution: () => analyticsService.getRatingDistribution(),
+    getTrends: (period: '7d' | '30d' | '90d' | '1y') => analyticsService.getTrends(period),
+    getKeywords: () => analyticsService.getKeywords(),
+    generateInsights: () => analyticsService.generateInsights(),
+    getMetrics: () => analyticsService.getMetrics(),
+    generateReport: (period: '7d' | '30d' | '90d' | '1y') => analyticsService.generateReport(period),
+    exportReport: (options: any) => analyticsService.exportReport(options),
+    sendReportByEmail: (options: any) => analyticsService.sendReportByEmail(options)
+  };
+
+  const alerts = {
+    getAlerts: () => alertService.getAlerts(),
+    getFilteredAlerts: (filters: any) => alertService.getFilteredAlerts(filters),
+    getAlertStats: () => alertService.getAlertStats(),
+    getConfig: () => alertService.getConfig(),
+    setConfig: (config: any) => alertService.setConfig(config),
+    getRules: () => alertService.getRules(),
+    addRule: (rule: any) => alertService.addRule(rule),
+    removeRule: (ruleId: string) => alertService.removeRule(ruleId),
+    markAsRead: (alertId: string) => alertService.markAsRead(alertId),
+    markAsResolved: (alertId: string) => alertService.markAsResolved(alertId),
+    markAllAsRead: () => alertService.markAllAsRead(),
+    deleteAlert: (alertId: string) => alertService.deleteAlert(alertId),
+    addListener: (listener: any) => alertService.addListener(listener),
+    removeListener: (listener: any) => alertService.removeListener(listener)
+  };
+
+  const reports = {
+    getTemplates: () => reportService.getTemplates(),
+    getTemplate: (templateId: string) => reportService.getTemplate(templateId),
+    generateReport: (templateId: string, period: any, customFields?: any) => 
+      reportService.generateReport(templateId, period, customFields),
+    getReports: () => reportService.getReports(),
+    getReport: (reportId: string) => reportService.getReport(reportId),
+    deleteReport: (reportId: string) => reportService.deleteReport(reportId),
+    exportReport: (reportId: string, format: any) => reportService.exportReport(reportId, format)
   };
 
   return (
@@ -324,7 +375,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       searchProducts,
       loadProductFromMercadoLivre,
       syncMercadoLivreData,
-      isLoading: isLoading || mercadoLivre.isLoading,
+      isLoading,
+      analytics,
+      alerts,
+      reports,
       mercadoLivreProducts: mercadoLivre.products,
       mercadoLivreReviews: mercadoLivre.reviews
     }}>

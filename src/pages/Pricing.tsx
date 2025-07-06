@@ -2,23 +2,17 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Check, 
-  X, 
   Star, 
   Zap, 
-  Crown, 
-  Building2, 
-  CreditCard, 
   Shield, 
-  Headphones, 
-  TrendingUp,
-  Users,
-  MessageSquare,
-  BarChart3,
-  Bot,
+  HeadphonesIcon, 
+  ArrowRight,
+  Crown,
+  Sparkles,
+  X,
   Mail,
   Smartphone,
-  Globe,
-  ArrowRight
+  TrendingUp
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -98,7 +92,7 @@ const Pricing: React.FC = () => {
       name: 'Enterprise',
       description: 'Para grandes empresas',
       price: { monthly: 499, yearly: 4990 },
-      icon: Building2,
+      icon: Crown,
       color: 'orange',
       features: [
         { name: 'Análises ilimitadas', included: true },
@@ -118,7 +112,7 @@ const Pricing: React.FC = () => {
   ];
 
   const getColorClasses = (color: string, variant: 'bg' | 'text' | 'border' | 'gradient') => {
-    const colors = {
+    const colors: Record<string, { bg: string; text: string; border: string; gradient: string }> = {
       gray: {
         bg: 'bg-gray-50',
         text: 'text-gray-600',
@@ -454,7 +448,7 @@ const Pricing: React.FC = () => {
             description: 'Criptografia de ponta e conformidade com LGPD'
           },
           {
-            icon: Headphones,
+            icon: HeadphonesIcon,
             title: 'Suporte Especializado',
             description: 'Equipe dedicada para ajudar seu negócio crescer'
           },
