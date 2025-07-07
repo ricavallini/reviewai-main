@@ -83,7 +83,8 @@ export const useMercadoLivre = () => {
 
   // Iniciar login OAuth
   const login = useCallback((clientId: string) => {
-    const redirectUri = `${window.location.origin}/auth/callback`;
+    // Sempre usar a URL de produção para o redirectUri
+    const redirectUri = 'https://reviewai-main.netlify.app/auth/callback';
     const state = window.location.pathname;
     window.location.href = getAuthorizationUrl(clientId, redirectUri, state);
   }, []);
