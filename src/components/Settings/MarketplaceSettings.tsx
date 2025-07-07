@@ -96,6 +96,9 @@ const MarketplaceSettings: React.FC = () => {
     }
   ]);
 
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+
   // Atualizar estado do Mercado Livre quando a integração mudar
   useEffect(() => {
     setMarketplaces(prev => prev.map(marketplace => 
@@ -111,6 +114,12 @@ const MarketplaceSettings: React.FC = () => {
         : marketplace
     ));
   }, [isConnected, isLoading]);
+
+  useEffect(() => {
+    // Carregar valores salvos do localStorage ao montar
+    setClientId(localStorage.getItem('ml_client_id') || '');
+    setClientSecret(localStorage.getItem('ml_client_secret') || '');
+  }, []);
 
   const getColorClasses = (color: string) => {
     const colors: Record<string, string> = {
@@ -267,6 +276,13 @@ const MarketplaceSettings: React.FC = () => {
           }
         : marketplace
     ));
+  };
+
+  const handleSave = () => {
+    localStorage.setItem('ml_client_id', clientId);
+    localStorage.setItem('ml_client_secret', clientSecret);
+    setSaveStatus('success');
+    setTimeout(() => setSaveStatus('idle'), 2000);
   };
 
   return (
@@ -478,6 +494,38 @@ const MarketplaceSettings: React.FC = () => {
 
       <div className="bg-white rounded-lg p-6 border border-gray-200">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Mercado Livre</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+            <input
+              type="text"
+              value={clientId}
+              onChange={e => setClientId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Cole seu Client ID aqui"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+            <input
+              type="password"
+              value={clientSecret}
+              onChange={e => setClientSecret(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Cole seu Client Secret aqui"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleSave}
+          className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors mr-4"
+        >
+          Salvar Credenciais
+        </button>
+        {saveStatus === 'success' && <span className="text-green-600 ml-2">Salvo!</span>}
+      </div>
+
+      <div className="bg-white rounded-lg p-6 border border-gray-200">
         {isConnected ? (
           <div className="flex items-center space-x-4">
             <span className="text-green-600 font-medium">Conectado ao Mercado Livre</span>
