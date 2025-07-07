@@ -551,4 +551,48 @@ export async function upsertMLCredentialsToSupabase(userId: string, creds: {
       updated_at: new Date().toISOString(),
     });
   if (error) throw error;
+}
+
+// Salvar tokens OAuth no Supabase
+export async function saveMLTokensToSupabase(userId: string, tokens: { access_token: string; refresh_token: string; expires_at: string; }) {
+  const { error } = await supabase
+    .from('mercado_livre_credentials')
+    .update({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: tokens.expires_at,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+// Salvar perfil do usuário Mercado Livre
+export async function upsertMLUserInfoToSupabase(userId: string, userInfo: any) {
+  const { error } = await supabase
+    .from('mercado_livre_user_info')
+    .upsert({
+      user_id: userId,
+      ...userInfo,
+      updated_at: new Date().toISOString(),
+    });
+  if (error) throw error;
+}
+
+// Salvar produtos sincronizados
+export async function upsertMLProductsToSupabase(userId: string, products: any[]) {
+  const rows = products.map(p => ({ ...p, user_id: userId, synced_at: new Date().toISOString() }));
+  const { error } = await supabase
+    .from('mercado_livre_products')
+    .upsert(rows);
+  if (error) throw error;
+}
+
+// Salvar reviews sincronizadas
+export async function upsertMLReviewsToSupabase(userId: string, reviews: any[]) {
+  const rows = reviews.map(r => ({ ...r, user_id: userId, created_at: new Date().toISOString() }));
+  const { error } = await supabase
+    .from('mercado_livre_reviews')
+    .upsert(rows);
+  if (error) throw error;
 } 

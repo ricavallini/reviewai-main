@@ -21,8 +21,15 @@ import {
   getAuthorizationUrl,
   exchangeCodeForToken,
   isOAuthAuthenticated,
-  logoutOAuth
+  logoutOAuth,
+  getMLCredentialsFromSupabase,
+  upsertMLCredentialsToSupabase,
+  saveMLTokensToSupabase,
+  upsertMLUserInfoToSupabase,
+  upsertMLProductsToSupabase,
+  upsertMLReviewsToSupabase
 } from '../services/mercadolivre';
+import { useSupabaseUser } from './useSupabase';
 
 interface MercadoLivreStats {
   totalProducts: number;
@@ -68,6 +75,7 @@ const initialState: MercadoLivreState = {
 
 export const useMercadoLivre = () => {
   const [state, setState] = useState<MercadoLivreState>(initialState);
+  const user = useSupabaseUser();
 
   // Verificar status da conexão ao inicializar
   useEffect(() => {
@@ -290,6 +298,9 @@ export const useMercadoLivre = () => {
         stats,
         isLoading: false
       }));
+
+      // Exemplo: ao sincronizar produtos/reviews, salvar no Supabase
+      await syncDataToSupabase(products, reviewsWithSentiment);
     } catch (error) {
       setState(prev => ({
         ...prev,
@@ -298,6 +309,28 @@ export const useMercadoLivre = () => {
       }));
     }
   }, []);
+
+  // Exemplo: ao autenticar, salvar tokens e perfil no Supabase
+  const handleOAuthCallback = useCallback(async (code: string) => {
+    if (!user || !user.id) return;
+    const redirectUri = 'https://reviewai-main.netlify.app/auth/callback';
+    const tokens = await exchangeCodeForToken(code, redirectUri);
+    await saveMLTokensToSupabase(user.id, {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    });
+    const userInfo = await getUserInfo();
+    await upsertMLUserInfoToSupabase(user.id, userInfo);
+    setState(prev => ({ ...prev, isConnected: true, userInfo }));
+  }, [user]);
+
+  // Exemplo: ao sincronizar produtos/reviews, salvar no Supabase
+  const syncDataToSupabase = useCallback(async (products: any[], reviews: any[]) => {
+    if (!user || !user.id) return;
+    await upsertMLProductsToSupabase(user.id, products);
+    await upsertMLReviewsToSupabase(user.id, reviews);
+  }, [user]);
 
   // Limpar erro
   const clearError = useCallback(() => {
@@ -328,6 +361,7 @@ export const useMercadoLivre = () => {
     syncData,
     clearError,
     checkConnectionStatus,
-    login
+    login,
+    handleOAuthCallback
   };
 }; 
