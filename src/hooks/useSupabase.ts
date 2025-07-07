@@ -417,18 +417,46 @@ export const useMarketplaceCredentials = (userId?: string) => {
   };
 };
 
+// Verificar se Supabase está configurado
+const isSupabaseConfigured = () => {
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    return url && key && url !== 'undefined' && key !== 'undefined';
+  } catch {
+    return false;
+  }
+};
+
 export function useSupabaseUser() {
   const [user, setUser] = useState(null);
+  
   useEffect(() => {
-    const session = supabase.auth.getSession().then(({ data }) => {
-      setUser(data?.session?.user ?? null);
+    if (!isSupabaseConfigured()) {
+      // Fallback se Supabase não estiver configurado
+      setUser(null);
+      return;
+    }
+
+    // Importar Supabase dinamicamente apenas se configurado
+    import('../lib/supabase').then(({ supabase }) => {
+      const session = supabase.auth.getSession().then(({ data }) => {
+        setUser(data?.session?.user ?? null);
+      }).catch(() => {
+        setUser(null);
+      });
+      
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+      });
+      
+      return () => {
+        listener?.subscription.unsubscribe();
+      };
+    }).catch(() => {
+      setUser(null);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => {
-      listener?.subscription.unsubscribe();
-    };
   }, []);
+  
   return user;
 }

@@ -43,47 +43,99 @@ const MercadoLivrePanel: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [showCredentials, setShowCredentials] = useState(false);
 
-  // Carregar credenciais salvas do Supabase
+  // Carregar credenciais salvas do Supabase ou localStorage
   React.useEffect(() => {
-    if (user && user.id) {
-      getMLCredentialsFromSupabase(user.id).then((data) => {
-        if (data) {
-          setClientId(data.client_id || '');
-          setClientSecret(data.client_secret || '');
+    const loadCredentials = async () => {
+      try {
+        // Tentar carregar do Supabase primeiro
+        if (user && user.id) {
+          const data = await getMLCredentialsFromSupabase(user.id);
+          if (data) {
+            setClientId(data.client_id || '');
+            setClientSecret(data.client_secret || '');
+            return;
+          }
         }
-      }).catch(() => {});
-    }
+        
+        // Fallback para localStorage
+        const savedClientId = localStorage.getItem('ml_client_id');
+        const savedClientSecret = localStorage.getItem('ml_client_secret');
+        
+        if (savedClientId) setClientId(savedClientId);
+        if (savedClientSecret) setClientSecret(savedClientSecret);
+      } catch (error) {
+        console.warn('Erro ao carregar credenciais:', error);
+        // Fallback para localStorage em caso de erro
+        const savedClientId = localStorage.getItem('ml_client_id');
+        const savedClientSecret = localStorage.getItem('ml_client_secret');
+        
+        if (savedClientId) setClientId(savedClientId);
+        if (savedClientSecret) setClientSecret(savedClientSecret);
+      }
+    };
+
+    loadCredentials();
   }, [user]);
 
   const handleSaveCredentials = async () => {
-    if (!clientId || !clientSecret || !user || !user.id) {
+    if (!clientId || !clientSecret) {
       setSaveStatus('error');
       return;
     }
+    
     setIsLoading(true);
     setSaveStatus('idle');
+    
     try {
-      await upsertMLCredentialsToSupabase(user.id, { client_id: clientId, client_secret: clientSecret });
+      // Tentar salvar no Supabase primeiro
+      if (user && user.id) {
+        await upsertMLCredentialsToSupabase(user.id, { client_id: clientId, client_secret: clientSecret });
+      }
+      
+      // Fallback para localStorage
+      localStorage.setItem('ml_client_id', clientId);
+      localStorage.setItem('ml_client_secret', clientSecret);
+      
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
-      setSaveStatus('error');
+      console.warn('Erro ao salvar no Supabase, usando localStorage:', error);
+      // Fallback para localStorage
+      localStorage.setItem('ml_client_id', clientId);
+      localStorage.setItem('ml_client_secret', clientSecret);
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 2000);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleConnect = async () => {
-    if (!user || !user.id) {
-      alert('Usuário não autenticado.');
-      return;
-    }
     try {
-      const creds = await getMLCredentialsFromSupabase(user.id);
+      let creds = null;
+      
+      // Tentar buscar do Supabase primeiro
+      if (user && user.id) {
+        try {
+          creds = await getMLCredentialsFromSupabase(user.id);
+        } catch (error) {
+          console.warn('Erro ao buscar do Supabase:', error);
+        }
+      }
+      
+      // Fallback para localStorage
+      if (!creds || !creds.client_id) {
+        const savedClientId = localStorage.getItem('ml_client_id');
+        if (savedClientId) {
+          creds = { client_id: savedClientId };
+        }
+      }
+      
       if (!creds || typeof creds.client_id !== 'string' || !creds.client_id.trim()) {
         alert('Salve as credenciais antes de conectar.');
         return;
       }
+      
       mercadoLivre.login(String(creds.client_id));
     } catch (error) {
       alert('Erro ao buscar credenciais salvas.');
