@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Settings, CheckCircle, AlertCircle, Clock, ExternalLink, Zap, ShoppingCart, Globe, Smartphone, Mail, MessageCircle, Key, RefreshCw as Refresh, Trash2, X, Save, Eye, EyeOff } from 'lucide-react';
+import { Plus, Settings, CheckCircle, AlertCircle, Clock, ExternalLink, Zap, ShoppingCart, Smartphone, Mail, MessageCircle, Key, RefreshCw as Refresh, Trash2, X, Save, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useSupabaseUser } from '../hooks/useSupabase';
+import { getMLCredentialsFromSupabase, upsertMLCredentialsToSupabase } from '../services/mercadolivre';
+import { useMercadoLivre } from '../hooks/useMercadoLivre';
 
 interface Integration {
   id: string;
@@ -30,6 +33,142 @@ interface ConfigModal {
   isOpen: boolean;
   integration: Integration | null;
 }
+
+const MercadoLivrePanel: React.FC = () => {
+  const user = useSupabaseUser();
+  const mercadoLivre = useMercadoLivre();
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [showCredentials, setShowCredentials] = useState(false);
+
+  // Carregar credenciais salvas do Supabase
+  React.useEffect(() => {
+    if (user && user.id) {
+      getMLCredentialsFromSupabase(user.id).then((data) => {
+        if (data) {
+          setClientId(data.client_id || '');
+          setClientSecret(data.client_secret || '');
+        }
+      }).catch(() => {});
+    }
+  }, [user]);
+
+  const handleSaveCredentials = async () => {
+    if (!clientId || !clientSecret || !user || !user.id) {
+      setSaveStatus('error');
+      return;
+    }
+    setIsLoading(true);
+    setSaveStatus('idle');
+    try {
+      await upsertMLCredentialsToSupabase(user.id, { client_id: clientId, client_secret: clientSecret });
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      setSaveStatus('error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    if (!user || !user.id) {
+      alert('Usuário não autenticado.');
+      return;
+    }
+    try {
+      const creds = await getMLCredentialsFromSupabase(user.id);
+      if (!creds || typeof creds.client_id !== 'string' || !creds.client_id.trim()) {
+        alert('Salve as credenciais antes de conectar.');
+        return;
+      }
+      mercadoLivre.login(String(creds.client_id));
+    } catch (error) {
+      alert('Erro ao buscar credenciais salvas.');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6 mb-8">
+      <div className="flex items-center mb-4">
+        <ShoppingCart className="h-6 w-6 text-yellow-500 mr-2" />
+        <h2 className="text-lg font-semibold">Mercado Livre</h2>
+        <span className={`ml-4 px-2 py-1 rounded text-xs font-medium ${mercadoLivre.isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          {mercadoLivre.isConnected ? 'Conectado' : 'Desconectado'}
+        </span>
+      </div>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Client ID</label>
+          <div className="relative">
+            <input
+              type={showCredentials ? 'text' : 'password'}
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Digite seu Client ID"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCredentials(!showCredentials)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              {showCredentials ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Client Secret</label>
+          <div className="relative">
+            <input
+              type={showCredentials ? 'text' : 'password'}
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Digite seu Client Secret"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCredentials(!showCredentials)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              {showCredentials ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        <div className="flex space-x-2">
+          <button
+            type="button"
+            onClick={handleSaveCredentials}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
+            disabled={isLoading}
+          >
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar Credenciais'}
+          </button>
+          <button
+            type="button"
+            onClick={handleConnect}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors"
+          >
+            Conectar
+          </button>
+        </div>
+        {saveStatus === 'success' && (
+          <div className="text-green-600 text-sm mt-2 flex items-center gap-2">
+            <CheckCircle className="h-4 w-4" /> Credenciais salvas com sucesso!
+          </div>
+        )}
+        {saveStatus === 'error' && (
+          <div className="text-red-600 text-sm mt-2 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" /> Erro ao salvar credenciais. Verifique os campos e tente novamente.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const Integrations: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState<'all' | 'marketplace' | 'notification' | 'analytics'>('all');
@@ -788,6 +927,8 @@ const Integrations: React.FC = () => {
           </p>
         </motion.div>
       )}
+
+      <MercadoLivrePanel />
     </motion.div>
   );
 };

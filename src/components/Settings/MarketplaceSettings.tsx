@@ -15,7 +15,6 @@ import {
   Trash2,
   Loader2
 } from 'lucide-react';
-import { useMercadoLivre } from '../../hooks/useMercadoLivre';
 
 interface MarketplaceCredentials {
   apiKey: string;
@@ -42,20 +41,14 @@ const MarketplaceSettings: React.FC = () => {
   const [showCredentials, setShowCredentials] = useState<{ [key: string]: boolean }>({});
   const [saveStatus, setSaveStatus] = useState<{ [key: string]: 'idle' | 'success' | 'error' }>({});
   
-  // Hook da integração com Mercado Livre
-  const { isConnected, login, logout, isLoading, error } = useMercadoLivre();
-  
   const [marketplaces, setMarketplaces] = useState<MarketplaceConfig[]>([
     {
       id: 'mercadolivre',
       name: 'Mercado Livre',
       icon: ShoppingCart,
       color: 'yellow',
-      isConnected: isConnected,
-      status: isLoading ? 'syncing' : isConnected ? 'connected' : 'disconnected',
-      lastSync: undefined,
-      productsCount: undefined,
-      reviewsCount: undefined,
+      isConnected: false,
+      status: 'disconnected',
       credentials: {
         apiKey: '',
         secretKey: '',
@@ -98,22 +91,6 @@ const MarketplaceSettings: React.FC = () => {
 
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
-
-  // Atualizar estado do Mercado Livre quando a integração mudar
-  useEffect(() => {
-    setMarketplaces(prev => prev.map(marketplace => 
-      marketplace.id === 'mercadolivre' 
-        ? {
-            ...marketplace,
-            isConnected: isConnected,
-            status: isLoading ? 'syncing' : isConnected ? 'connected' : 'disconnected',
-            lastSync: undefined,
-            productsCount: undefined,
-            reviewsCount: undefined,
-          }
-        : marketplace
-    ));
-  }, [isConnected, isLoading]);
 
   useEffect(() => {
     // Carregar valores salvos do localStorage ao montar
