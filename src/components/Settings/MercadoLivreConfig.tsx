@@ -43,7 +43,7 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
     }
   }, [user]);
 
-  const handleSave = async () => {
+  const handleSaveCredentials = async () => {
     if (!clientId || !clientSecret || !user || !user.id) {
       setSaveStatus('error');
       return;
@@ -53,19 +53,22 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
     try {
       // Salvar credenciais no Supabase
       await upsertMLCredentialsToSupabase(user.id, { client_id: clientId, client_secret: clientSecret });
-      // Iniciar login OAuth imediatamente após salvar
-      const savedClientId = clientId;
-      if (savedClientId) {
-        mercadoLivre.login(savedClientId);
-      } else {
-        alert('Erro ao salvar o Client ID. Tente novamente.');
-      }
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
-      console.error('Erro ao configurar Mercado Livre:', error);
+      console.error('Erro ao salvar credenciais Mercado Livre:', error);
       setSaveStatus('error');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleConnect = () => {
+    if (!clientId) {
+      alert('Preencha o Client ID antes de conectar.');
+      return;
+    }
+    mercadoLivre.login(clientId);
   };
 
   const handleTestConnection = async () => {
@@ -222,34 +225,21 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
             </div>
           </div>
 
-          {/* Save Button */}
-          <div className="flex justify-end">
+          <div className="flex space-x-2">
             <button
-              onClick={handleSave}
-              disabled={isLoading || !clientId || !clientSecret}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center space-x-2 disabled:opacity-50"
+              type="button"
+              onClick={handleSaveCredentials}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors disabled:opacity-50"
+              disabled={isLoading}
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Conectando...</span>
-                </>
-              ) : saveStatus === 'success' ? (
-                <>
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Conectado!</span>
-                </>
-              ) : saveStatus === 'error' ? (
-                <>
-                  <AlertCircle className="h-4 w-4" />
-                  <span>Erro</span>
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  <span>Conectar</span>
-                </>
-              )}
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar Credenciais'}
+            </button>
+            <button
+              type="button"
+              onClick={handleConnect}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors"
+            >
+              Conectar
             </button>
           </div>
         </div>
