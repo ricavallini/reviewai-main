@@ -52,7 +52,12 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
       localStorage.setItem('ml_client_secret', clientSecret);
 
       // Iniciar login OAuth imediatamente após salvar
-      mercadoLivre.login(clientId);
+      const savedClientId = localStorage.getItem('ml_client_id');
+      if (savedClientId) {
+        mercadoLivre.login(savedClientId);
+      } else {
+        alert('Erro ao salvar o Client ID. Tente novamente.');
+      }
       // Não precisa aguardar connect, pois o login redireciona
     } catch (error) {
       console.error('Erro ao configurar Mercado Livre:', error);
