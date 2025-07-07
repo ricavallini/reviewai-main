@@ -69,11 +69,11 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
     }
     try {
       const creds = await getMLCredentialsFromSupabase(user.id);
-      if (!creds || !creds.client_id) {
+      if (!creds || typeof creds.client_id !== 'string' || !creds.client_id.trim()) {
         alert('Salve as credenciais antes de conectar.');
         return;
       }
-      mercadoLivre.login(creds.client_id);
+      mercadoLivre.login(String(creds.client_id));
     } catch (error) {
       alert('Erro ao buscar credenciais salvas.');
     }
