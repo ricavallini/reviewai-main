@@ -417,10 +417,10 @@ export function generateAutoResponse(review: MercadoLivreReview, sentiment: 'pos
 }
 
 // Geração da URL de autorização OAuth
-export function getAuthorizationUrl(redirectUri: string, state: string = ''): string {
+export function getAuthorizationUrl(clientId: string, redirectUri: string, state: string = ''): string {
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
+    client_id: clientId,
     redirect_uri: redirectUri,
     state
   });

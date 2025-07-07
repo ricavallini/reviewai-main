@@ -82,10 +82,10 @@ export const useMercadoLivre = () => {
   }, []);
 
   // Iniciar login OAuth
-  const login = useCallback(() => {
+  const login = useCallback((clientId: string) => {
     const redirectUri = `${window.location.origin}/auth/callback`;
     const state = window.location.pathname;
-    window.location.href = getAuthorizationUrl(redirectUri, state);
+    window.location.href = getAuthorizationUrl(clientId, redirectUri, state);
   }, []);
 
   // Logout
