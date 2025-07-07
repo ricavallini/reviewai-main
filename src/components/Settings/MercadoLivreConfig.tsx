@@ -51,7 +51,6 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
     setIsLoading(true);
     setSaveStatus('idle');
     try {
-      // Salvar credenciais no Supabase
       await upsertMLCredentialsToSupabase(user.id, { client_id: clientId, client_secret: clientSecret });
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 2000);
@@ -242,6 +241,16 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
               Conectar
             </button>
           </div>
+          {saveStatus === 'success' && (
+            <div className="text-green-600 text-sm mt-2 flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" /> Credenciais salvas com sucesso!
+            </div>
+          )}
+          {saveStatus === 'error' && (
+            <div className="text-red-600 text-sm mt-2 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" /> Erro ao salvar credenciais. Verifique os campos e tente novamente.
+            </div>
+          )}
         </div>
       )}
 
