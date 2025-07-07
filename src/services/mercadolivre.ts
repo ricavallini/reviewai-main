@@ -1,4 +1,5 @@
 import { MERCADO_LIVRE_CONFIG } from '../config/mercadolivre';
+import { supabase } from '../lib/supabase';
 
 // Interface para tokens
 interface MercadoLivreTokens {
@@ -522,4 +523,32 @@ export function isOAuthAuthenticated(): boolean {
 
 export function logoutOAuth(): void {
   clearOAuthTokens();
+}
+
+// Funções para integração com Supabase
+export async function getMLCredentialsFromSupabase(userId: string) {
+  const { data, error } = await supabase
+    .from('mercado_livre_credentials')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function upsertMLCredentialsToSupabase(userId: string, creds: {
+  client_id: string;
+  client_secret: string;
+  access_token?: string;
+  refresh_token?: string;
+  expires_at?: string;
+}) {
+  const { error } = await supabase
+    .from('mercado_livre_credentials')
+    .upsert({
+      user_id: userId,
+      ...creds,
+      updated_at: new Date().toISOString(),
+    });
+  if (error) throw error;
 } 

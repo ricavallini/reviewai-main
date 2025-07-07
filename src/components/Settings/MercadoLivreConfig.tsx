@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useMercadoLivre } from '../../hooks/useMercadoLivre';
 import { formatCurrency } from '../../utils/formatters';
+import { useSupabaseUser } from '../../hooks/useSupabase';
+import { getMLCredentialsFromSupabase, upsertMLCredentialsToSupabase } from '../../services/mercadolivre';
 
 interface MercadoLivreConfigProps {
   onClose?: () => void;
@@ -27,38 +29,37 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
   const mercadoLivre = useMercadoLivre();
+  const user = useSupabaseUser();
 
-  // Carregar credenciais salvas
+  // Carregar credenciais salvas do Supabase
   useEffect(() => {
-    const savedClientId = localStorage.getItem('ml_client_id');
-    const savedClientSecret = localStorage.getItem('ml_client_secret');
-    
-    if (savedClientId) setClientId(savedClientId);
-    if (savedClientSecret) setClientSecret(savedClientSecret);
-  }, []);
+    if (user && user.id) {
+      getMLCredentialsFromSupabase(user.id).then((data) => {
+        if (data) {
+          setClientId(data.client_id || '');
+          setClientSecret(data.client_secret || '');
+        }
+      }).catch(() => {});
+    }
+  }, [user]);
 
   const handleSave = async () => {
-    if (!clientId || !clientSecret) {
+    if (!clientId || !clientSecret || !user || !user.id) {
       setSaveStatus('error');
       return;
     }
-
     setIsLoading(true);
     setSaveStatus('idle');
-
     try {
-      // Salvar credenciais
-      localStorage.setItem('ml_client_id', clientId);
-      localStorage.setItem('ml_client_secret', clientSecret);
-
+      // Salvar credenciais no Supabase
+      await upsertMLCredentialsToSupabase(user.id, { client_id: clientId, client_secret: clientSecret });
       // Iniciar login OAuth imediatamente após salvar
-      const savedClientId = localStorage.getItem('ml_client_id');
+      const savedClientId = clientId;
       if (savedClientId) {
         mercadoLivre.login(savedClientId);
       } else {
         alert('Erro ao salvar o Client ID. Tente novamente.');
       }
-      // Não precisa aguardar connect, pois o login redireciona
     } catch (error) {
       console.error('Erro ao configurar Mercado Livre:', error);
       setSaveStatus('error');
