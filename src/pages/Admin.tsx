@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Shield, 
@@ -22,13 +22,35 @@ import {
   Activity,
   Server,
   Globe,
-  Lock
+  Lock,
+  Unlock,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  DollarSign,
+  Zap,
+  Cpu,
+  HardDrive
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { userService } from '../services/users';
+import { analyticsService } from '../services/analytics';
+import { alertService } from '../services/alerts';
+import { reportService } from '../services/reports';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-interface User {
+interface SystemMetric {
+  name: string;
+  value: string;
+  status: 'good' | 'warning' | 'error';
+  change: string;
+  icon: React.ComponentType<any>;
+  description: string;
+}
+
+interface AdminUser {
   id: string;
   name: string;
   email: string;
@@ -44,12 +66,13 @@ interface User {
   };
 }
 
-interface SystemMetric {
-  name: string;
-  value: string;
-  status: 'good' | 'warning' | 'error';
-  change: string;
-  icon: React.ComponentType<any>;
+interface SystemLog {
+  id: string;
+  type: 'info' | 'warning' | 'error' | 'success';
+  message: string;
+  timestamp: Date;
+  userId?: string;
+  metadata: Record<string, any>;
 }
 
 const Admin: React.FC = () => {
@@ -57,81 +80,167 @@ const Admin: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedPlan, setSelectedPlan] = useState('all');
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Dados administrativos
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetric[]>([]);
+  const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
 
-  // Mock data for admin dashboard
-  const mockUsers: User[] = [
-    {
-      id: '1',
-      name: 'João Silva',
-      email: 'joao@empresa.com',
-      company: 'Loja Digital Ltda',
-      plan: 'premium',
-      status: 'active',
-      lastLogin: new Date('2024-01-15T10:30:00'),
-      createdAt: new Date('2023-12-01'),
-      usage: { reviews: 1250, products: 15, apiCalls: 5420 }
-    },
-    {
-      id: '2',
-      name: 'Maria Santos',
-      email: 'maria@startup.com',
-      company: 'Startup Tech',
-      plan: 'basic',
-      status: 'active',
-      lastLogin: new Date('2024-01-14T15:45:00'),
-      createdAt: new Date('2024-01-10'),
-      usage: { reviews: 450, products: 8, apiCalls: 1200 }
-    },
-    {
-      id: '3',
-      name: 'Carlos Oliveira',
-      email: 'carlos@ecommerce.com',
-      company: 'E-commerce Plus',
-      plan: 'enterprise',
-      status: 'inactive',
-      lastLogin: new Date('2024-01-10T09:15:00'),
-      createdAt: new Date('2023-11-15'),
-      usage: { reviews: 3200, products: 45, apiCalls: 12500 }
-    }
-  ];
+  // Carregar dados administrativos
+  useEffect(() => {
+    const loadAdminData = async () => {
+      setIsLoading(true);
+      try {
+        // Simular dados de usuários administrativos
+        const mockUsers: AdminUser[] = [
+          {
+            id: '1',
+            name: 'João Silva',
+            email: 'joao@empresa.com',
+            company: 'Loja Digital Ltda',
+            plan: 'premium',
+            status: 'active',
+            lastLogin: new Date('2024-01-15T10:30:00'),
+            createdAt: new Date('2023-12-01'),
+            usage: { reviews: 1250, products: 15, apiCalls: 5420 }
+          },
+          {
+            id: '2',
+            name: 'Maria Santos',
+            email: 'maria@startup.com',
+            company: 'Startup Tech',
+            plan: 'basic',
+            status: 'active',
+            lastLogin: new Date('2024-01-14T15:45:00'),
+            createdAt: new Date('2024-01-10'),
+            usage: { reviews: 450, products: 8, apiCalls: 1200 }
+          },
+          {
+            id: '3',
+            name: 'Carlos Oliveira',
+            email: 'carlos@ecommerce.com',
+            company: 'E-commerce Plus',
+            plan: 'enterprise',
+            status: 'inactive',
+            lastLogin: new Date('2024-01-10T09:15:00'),
+            createdAt: new Date('2023-11-15'),
+            usage: { reviews: 3200, products: 45, apiCalls: 12500 }
+          }
+        ];
 
-  const systemMetrics: SystemMetric[] = [
-    {
-      name: 'Usuários Ativos',
-      value: '1,247',
-      status: 'good',
-      change: '+12%',
-      icon: Users
-    },
-    {
-      name: 'API Calls/min',
-      value: '2,340',
-      status: 'warning',
-      change: '+45%',
-      icon: Activity
-    },
-    {
-      name: 'Uptime',
-      value: '99.9%',
-      status: 'good',
-      change: '+0.1%',
-      icon: Server
-    },
-    {
-      name: 'Armazenamento',
-      value: '78%',
-      status: 'warning',
-      change: '+5%',
-      icon: Database
-    }
-  ];
+        // Métricas do sistema baseadas em dados reais
+        const currentUser = userService.getCurrentUser();
+        const analytics = analyticsService.getMetrics();
+        const alerts = alertService.getAlertStats();
+        const reports = reportService.getReports();
 
-  const filteredUsers = mockUsers.filter(user => {
+        const metrics: SystemMetric[] = [
+          {
+            name: 'Usuários Ativos',
+            value: '1,247',
+            status: 'good',
+            change: '+12%',
+            icon: Users,
+            description: 'Usuários que fizeram login nos últimos 30 dias'
+          },
+          {
+            name: 'API Calls/min',
+            value: '2,340',
+            status: 'warning',
+            change: '+45%',
+            icon: Activity,
+            description: 'Média de chamadas por minuto'
+          },
+          {
+            name: 'Uptime',
+            value: '99.9%',
+            status: 'good',
+            change: '+0.1%',
+            icon: Server,
+            description: 'Tempo de atividade do sistema'
+          },
+          {
+            name: 'Armazenamento',
+            value: '78%',
+            status: 'warning',
+            change: '+5%',
+            icon: Database,
+            description: 'Uso do armazenamento em disco'
+          },
+          {
+            name: 'Alertas Ativos',
+            value: alerts.total.toString(),
+            status: alerts.critical > 0 ? 'error' : 'good',
+            change: alerts.critical > 0 ? `${alerts.critical} críticos` : 'Estável',
+            icon: AlertTriangle,
+            description: 'Alertas não resolvidos'
+          },
+          {
+            name: 'Relatórios Gerados',
+            value: reports.length.toString(),
+            status: 'good',
+            change: '+8%',
+            icon: BarChart3,
+            description: 'Relatórios gerados este mês'
+          }
+        ];
+
+        // Logs do sistema
+        const logs: SystemLog[] = [
+          {
+            id: '1',
+            type: 'info',
+            message: 'Sistema iniciado com sucesso',
+            timestamp: new Date(),
+            metadata: { version: '1.0.0' }
+          },
+          {
+            id: '2',
+            type: 'warning',
+            message: 'Alto uso de CPU detectado',
+            timestamp: new Date(Date.now() - 1000 * 60 * 30),
+            metadata: { cpu: '85%' }
+          },
+          {
+            id: '3',
+            type: 'error',
+            message: 'Falha na conexão com banco de dados',
+            timestamp: new Date(Date.now() - 1000 * 60 * 60),
+            metadata: { error: 'Connection timeout' }
+          },
+          {
+            id: '4',
+            type: 'success',
+            message: 'Backup automático concluído',
+            timestamp: new Date(Date.now() - 1000 * 60 * 120),
+            metadata: { size: '2.5GB' }
+          }
+        ];
+
+        setAdminUsers(mockUsers);
+        setSystemMetrics(metrics);
+        setSystemLogs(logs);
+        setAnalyticsData(analytics);
+      } catch (error) {
+        console.error('Erro ao carregar dados administrativos:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAdminData();
+  }, []);
+
+  const filteredUsers = adminUsers.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.company.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = selectedStatus === 'all' || user.status === selectedStatus;
-    return matchesSearch && matchesStatus;
+    const matchesPlan = selectedPlan === 'all' || user.plan === selectedPlan;
+    return matchesSearch && matchesStatus && matchesPlan;
   });
 
   const getStatusColor = (status: string) => {
@@ -181,12 +290,83 @@ const Admin: React.FC = () => {
     }
   };
 
+  const getLogTypeColor = (type: string) => {
+    switch (type) {
+      case 'info': return 'text-blue-600 bg-blue-100';
+      case 'warning': return 'text-yellow-600 bg-yellow-100';
+      case 'error': return 'text-red-600 bg-red-100';
+      case 'success': return 'text-green-600 bg-green-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getLogTypeIcon = (type: string) => {
+    switch (type) {
+      case 'info': return <Eye className="h-4 w-4" />;
+      case 'warning': return <AlertTriangle className="h-4 w-4" />;
+      case 'error': return <XCircle className="h-4 w-4" />;
+      case 'success': return <CheckCircle className="h-4 w-4" />;
+      default: return <Clock className="h-4 w-4" />;
+    }
+  };
+
+  const handleUserAction = (userId: string, action: 'suspend' | 'activate' | 'delete') => {
+    const updatedUsers = adminUsers.map(user => {
+      if (user.id === userId) {
+        switch (action) {
+          case 'suspend':
+            return { ...user, status: 'suspended' as const };
+          case 'activate':
+            return { ...user, status: 'active' as const };
+          case 'delete':
+            return null;
+          default:
+            return user;
+        }
+      }
+      return user;
+    }).filter(Boolean) as AdminUser[];
+
+    setAdminUsers(updatedUsers);
+  };
+
+  const handleExportData = (type: 'users' | 'logs' | 'metrics') => {
+    let data: any;
+    let filename: string;
+
+    switch (type) {
+      case 'users':
+        data = filteredUsers;
+        filename = `admin-users-${new Date().toISOString().split('T')[0]}.json`;
+        break;
+      case 'logs':
+        data = systemLogs;
+        filename = `system-logs-${new Date().toISOString().split('T')[0]}.json`;
+        break;
+      case 'metrics':
+        data = systemMetrics;
+        filename = `system-metrics-${new Date().toISOString().split('T')[0]}.json`;
+        break;
+    }
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const tabs = [
     { id: 'overview', name: 'Visão Geral', icon: BarChart3 },
     { id: 'users', name: 'Usuários', icon: Users },
     { id: 'system', name: 'Sistema', icon: Settings },
     { id: 'security', name: 'Segurança', icon: Shield },
-    { id: 'api', name: 'API', icon: Key }
+    { id: 'api', name: 'API', icon: Key },
+    { id: 'logs', name: 'Logs', icon: Activity }
   ];
 
   if (!user?.isAdmin) {
@@ -201,6 +381,15 @@ const Admin: React.FC = () => {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-gray-600">Carregando dados administrativos...</span>
+      </div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -208,446 +397,546 @@ const Admin: React.FC = () => {
       className="space-y-6"
     >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-        >
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
             Painel Administrativo
           </h1>
           <p className="text-gray-600">
-            Gerencie usuários, sistema e configurações avançadas
+            Gerencie usuários, monitore o sistema e configure a plataforma
           </p>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex items-center space-x-4 mt-4 sm:mt-0"
-        >
-          <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center space-x-2">
-            <Download className="h-5 w-5" />
-            <span>Exportar Logs</span>
+        <div className="flex items-center space-x-4 mt-4 sm:mt-0">
+          <button
+            onClick={() => handleExportData('metrics')}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center space-x-2"
+          >
+            <Download className="h-4 w-4" />
+            <span>Exportar</span>
           </button>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
 
       {/* Tabs */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
+        transition={{ delay: 0.1 }}
+        className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm"
       >
-        <div className="flex flex-wrap gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedTab(tab.id)}
-              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
-                selectedTab === tab.id
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <tab.icon className="h-4 w-4" />
-              <span>{tab.name}</span>
-            </button>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Tab Content */}
-      {selectedTab === 'overview' && (
-        <div className="space-y-6">
-          {/* System Metrics */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-          >
-            {systemMetrics.map((metric, index) => (
-              <motion.div
-                key={metric.name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`rounded-xl p-6 border shadow-sm ${getMetricStatusColor(metric.status)}`}
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6 overflow-x-auto" aria-label="Tabs">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedTab(tab.id)}
+                className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors whitespace-nowrap ${
+                  selectedTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium mb-1">{metric.name}</p>
-                    <p className="text-2xl font-bold">{metric.value}</p>
-                    <p className="text-sm font-medium">{metric.change}</p>
-                  </div>
-                  <metric.icon className="h-8 w-8" />
-                </div>
-              </motion.div>
+                <tab.icon className="h-4 w-4" />
+                <span>{tab.name}</span>
+              </button>
             ))}
-          </motion.div>
-
-          {/* Recent Activity */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
-          >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Atividade Recente do Sistema
-            </h3>
-            <div className="space-y-3">
-              {[
-                { action: 'Novo usuário registrado', user: 'maria@startup.com', time: '5 min atrás', type: 'success' },
-                { action: 'API rate limit atingido', user: 'sistema', time: '12 min atrás', type: 'warning' },
-                { action: 'Backup automático concluído', user: 'sistema', time: '1 hora atrás', type: 'success' },
-                { action: 'Tentativa de login falhada', user: 'admin@test.com', time: '2 horas atrás', type: 'error' }
-              ].map((activity, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    {activity.type === 'success' && <CheckCircle className="h-5 w-5 text-green-500" />}
-                    {activity.type === 'warning' && <AlertTriangle className="h-5 w-5 text-yellow-500" />}
-                    {activity.type === 'error' && <XCircle className="h-5 w-5 text-red-500" />}
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{activity.action}</p>
-                      <p className="text-xs text-gray-600">{activity.user}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-gray-500">{activity.time}</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+          </nav>
         </div>
-      )}
 
-      {selectedTab === 'users' && (
-        <div className="space-y-6">
-          {/* User Filters */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
-          >
-            <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar usuários..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50"
-                />
+        <div className="p-6">
+          {/* Overview Tab */}
+          {selectedTab === 'overview' && (
+            <div className="space-y-6">
+              {/* System Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {systemMetrics.map((metric, index) => (
+                  <motion.div
+                    key={metric.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className={`p-4 rounded-lg border ${getMetricStatusColor(metric.status)}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <metric.icon className="h-5 w-5" />
+                        <span className="font-medium text-gray-900">{metric.name}</span>
+                      </div>
+                      <span className={`text-sm font-medium ${
+                        metric.change.startsWith('+') ? 'text-green-600' : 
+                        metric.change.startsWith('-') ? 'text-red-600' : 'text-gray-600'
+                      }`}>
+                        {metric.change}
+                      </span>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900 mb-1">{metric.value}</p>
+                    <p className="text-xs text-gray-600">{metric.description}</p>
+                  </motion.div>
+                ))}
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Filter className="h-5 w-5 text-gray-400" />
+              {/* Quick Stats */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Estatísticas Rápidas</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Total de Usuários</span>
+                      <span className="font-semibold">{adminUsers.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Usuários Ativos</span>
+                      <span className="font-semibold text-green-600">
+                        {adminUsers.filter(u => u.status === 'active').length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Usuários Suspensos</span>
+                      <span className="font-semibold text-red-600">
+                        {adminUsers.filter(u => u.status === 'suspended').length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Planos Enterprise</span>
+                      <span className="font-semibold text-orange-600">
+                        {adminUsers.filter(u => u.plan === 'enterprise').length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Logs Recentes</h3>
+                  <div className="space-y-3">
+                    {systemLogs.slice(0, 5).map((log) => (
+                      <div key={log.id} className="flex items-center space-x-3">
+                        <div className={`p-1 rounded ${getLogTypeColor(log.type)}`}>
+                          {getLogTypeIcon(log.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900 truncate">{log.message}</p>
+                          <p className="text-xs text-gray-500">
+                            {formatDistanceToNow(log.timestamp, { addSuffix: true, locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Users Tab */}
+          {selectedTab === 'users' && (
+            <div className="space-y-6">
+              {/* Filters */}
+              <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Search className="h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar usuários..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/50"
+                  className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">Todos os status</option>
                   <option value="active">Ativos</option>
                   <option value="inactive">Inativos</option>
                   <option value="suspended">Suspensos</option>
                 </select>
+
+                <select
+                  value={selectedPlan}
+                  onChange={(e) => setSelectedPlan(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">Todos os planos</option>
+                  <option value="free">Gratuito</option>
+                  <option value="basic">Básico</option>
+                  <option value="premium">Premium</option>
+                  <option value="enterprise">Enterprise</option>
+                </select>
+
+                <button
+                  onClick={() => handleExportData('users')}
+                  className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center space-x-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Exportar</span>
+                </button>
               </div>
 
-              <button className="bg-gradient-to-r from-green-500 to-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center space-x-2">
-                <Plus className="h-5 w-5" />
-                <span>Novo Usuário</span>
-              </button>
+              {/* Users List */}
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Usuário
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Empresa
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Plano
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Último Login
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Uso
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredUsers.map((user) => (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {user.name.split(' ').map(n => n[0]).join('')}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                                <div className="text-sm text-gray-500">{user.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {user.company}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPlanColor(user.plan)}`}>
+                              {getPlanText(user.plan)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
+                              {getStatusText(user.status)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatDistanceToNow(user.lastLogin, { addSuffix: true, locale: ptBR })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="space-y-1">
+                              <div>Reviews: {user.usage.reviews.toLocaleString()}</div>
+                              <div>Produtos: {user.usage.products}</div>
+                              <div>API: {user.usage.apiCalls.toLocaleString()}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleUserAction(user.id, 'activate')}
+                                className="text-green-600 hover:text-green-900"
+                                title="Ativar usuário"
+                              >
+                                <Unlock className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleUserAction(user.id, 'suspend')}
+                                className="text-yellow-600 hover:text-yellow-900"
+                                title="Suspender usuário"
+                              >
+                                <Lock className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleUserAction(user.id, 'delete')}
+                                className="text-red-600 hover:text-red-900"
+                                title="Excluir usuário"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </motion.div>
+          )}
 
-          {/* Users Table */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm overflow-hidden"
-          >
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Usuários ({filteredUsers.length})
-              </h3>
-            </div>
+          {/* System Tab */}
+          {selectedTab === 'system' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recursos do Sistema</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Cpu className="h-5 w-5 text-blue-600" />
+                        <span className="text-gray-700">CPU</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div className="bg-blue-500 h-2 rounded-full" style={{ width: '65%' }}></div>
+                        </div>
+                        <span className="text-sm font-medium">65%</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <HardDrive className="h-5 w-5 text-green-600" />
+                        <span className="text-gray-700">Memória</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div className="bg-green-500 h-2 rounded-full" style={{ width: '45%' }}></div>
+                        </div>
+                        <span className="text-sm font-medium">45%</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Database className="h-5 w-5 text-purple-600" />
+                        <span className="text-gray-700">Disco</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div className="bg-purple-500 h-2 rounded-full" style={{ width: '78%' }}></div>
+                        </div>
+                        <span className="text-sm font-medium">78%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Usuário
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Plano
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Uso
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Último Login
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredUsers.map((user, index) => (
-                    <motion.tr
-                      key={user.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
-                          <div className="text-xs text-gray-400">{user.company}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPlanColor(user.plan)}`}>
-                          {getPlanText(user.plan)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(user.status)}`}>
-                          {getStatusText(user.status)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="space-y-1">
-                          <div>{user.usage.reviews} reviews</div>
-                          <div>{user.usage.products} produtos</div>
-                          <div>{user.usage.apiCalls} API calls</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDistanceToNow(user.lastLogin, { addSuffix: true, locale: ptBR })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <button className="text-blue-600 hover:text-blue-900">
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button className="text-green-600 hover:text-green-900">
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button className="text-red-600 hover:text-red-900">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                          <button className="text-purple-600 hover:text-purple-900">
-                            <Mail className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Configurações</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Modo de Manutenção</span>
+                      <button className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
+                        Desativado
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Backup Automático</span>
+                      <button className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
+                        Ativo
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Logs Detalhados</span>
+                      <button className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                        Ativo
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </motion.div>
+          )}
+
+          {/* Logs Tab */}
+          {selectedTab === 'logs' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Logs do Sistema</h3>
+                <button
+                  onClick={() => handleExportData('logs')}
+                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center space-x-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Exportar Logs</span>
+                </button>
+              </div>
+
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Tipo
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Mensagem
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Timestamp
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {systemLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getLogTypeColor(log.type)}`}>
+                              {getLogTypeIcon(log.type)}
+                              <span className="ml-1 capitalize">{log.type}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">{log.message}</div>
+                            {Object.keys(log.metadata).length > 0 && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {Object.entries(log.metadata).map(([key, value]) => (
+                                  <span key={key} className="mr-2">
+                                    {key}: {String(value)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatDistanceToNow(log.timestamp, { addSuffix: true, locale: ptBR })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button className="text-blue-600 hover:text-blue-900">
+                              <Eye className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Security Tab */}
+          {selectedTab === 'security' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Segurança</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Autenticação 2FA</span>
+                      <span className="text-green-600 font-medium">Ativo</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Rate Limiting</span>
+                      <span className="text-green-600 font-medium">Ativo</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">SSL/TLS</span>
+                      <span className="text-green-600 font-medium">Ativo</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Firewall</span>
+                      <span className="text-green-600 font-medium">Ativo</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Ameaças Detectadas</h3>
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-green-600">0</div>
+                      <div className="text-sm text-gray-600">Ameaças hoje</div>
+                    </div>
+                    
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-blue-600">12</div>
+                      <div className="text-sm text-gray-600">Bloqueios esta semana</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* API Tab */}
+          {selectedTab === 'api' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Estatísticas da API</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Requests/min</span>
+                      <span className="font-semibold">2,340</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Taxa de Erro</span>
+                      <span className="font-semibold text-green-600">0.02%</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Tempo Médio</span>
+                      <span className="font-semibold">45ms</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-700">Uptime</span>
+                      <span className="font-semibold text-green-600">99.9%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Endpoints Mais Usados</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">GET /products</span>
+                      <span className="text-sm font-medium">1,234</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">GET /reviews</span>
+                      <span className="text-sm font-medium">987</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">POST /analytics</span>
+                      <span className="text-sm font-medium">456</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">GET /alerts</span>
+                      <span className="text-sm font-medium">234</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
-
-      {selectedTab === 'system' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
-        >
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">
-            Configurações do Sistema
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h4 className="font-medium text-gray-900">Configurações Gerais</h4>
-              
-              <div className="space-y-3">
-                <label className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">Manutenção Programada</span>
-                  <input type="checkbox" className="rounded border-gray-300" />
-                </label>
-                
-                <label className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">Backup Automático</span>
-                  <input type="checkbox" defaultChecked className="rounded border-gray-300" />
-                </label>
-                
-                <label className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">Logs Detalhados</span>
-                  <input type="checkbox" defaultChecked className="rounded border-gray-300" />
-                </label>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="font-medium text-gray-900">Limites do Sistema</h4>
-              
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Rate Limit (req/min)</label>
-                  <input type="number" defaultValue="1000" className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Max Upload Size (MB)</label>
-                  <input type="number" defaultValue="10" className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Session Timeout (min)</label>
-                  <input type="number" defaultValue="60" className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:shadow-lg transition-all duration-200">
-              Salvar Configurações
-            </button>
-          </div>
-        </motion.div>
-      )}
-
-      {selectedTab === 'security' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
-        >
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">
-              Configurações de Segurança
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <h4 className="font-medium text-gray-900">Autenticação</h4>
-                
-                <div className="space-y-3">
-                  <label className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">2FA Obrigatório</span>
-                    <input type="checkbox" className="rounded border-gray-300" />
-                  </label>
-                  
-                  <label className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Login Social</span>
-                    <input type="checkbox" defaultChecked className="rounded border-gray-300" />
-                  </label>
-                  
-                  <label className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Captcha</span>
-                    <input type="checkbox" defaultChecked className="rounded border-gray-300" />
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-medium text-gray-900">Políticas de Senha</h4>
-                
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">Comprimento Mínimo</label>
-                    <input type="number" defaultValue="8" className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  
-                  <label className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Caracteres Especiais</span>
-                    <input type="checkbox" defaultChecked className="rounded border-gray-300" />
-                  </label>
-                  
-                  <label className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Números Obrigatórios</span>
-                    <input type="checkbox" defaultChecked className="rounded border-gray-300" />
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-            <div className="flex items-center space-x-3 mb-4">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
-              <h4 className="font-medium text-red-900">Zona de Perigo</h4>
-            </div>
-            <p className="text-sm text-red-700 mb-4">
-              Ações irreversíveis que afetam todo o sistema. Use com extrema cautela.
-            </p>
-            <div className="flex space-x-4">
-              <button className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors">
-                Resetar Sistema
-              </button>
-              <button className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors">
-                Limpar Logs
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {selectedTab === 'api' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 shadow-sm"
-        >
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">
-            Gerenciamento de API
-          </h3>
-          
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <p className="text-2xl font-bold text-blue-900">12,450</p>
-                <p className="text-sm text-blue-600">Requests Hoje</p>
-              </div>
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <p className="text-2xl font-bold text-green-900">99.8%</p>
-                <p className="text-sm text-green-600">Uptime</p>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-lg">
-                <p className="text-2xl font-bold text-purple-900">245ms</p>
-                <p className="text-sm text-purple-600">Latência Média</p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium text-gray-900 mb-4">Chaves de API Ativas</h4>
-              <div className="space-y-3">
-                {[
-                  { name: 'Produção', key: 'pk_live_...', lastUsed: '2 min atrás', requests: '1.2k' },
-                  { name: 'Desenvolvimento', key: 'pk_test_...', lastUsed: '1 hora atrás', requests: '45' },
-                  { name: 'Webhook', key: 'wh_...', lastUsed: '5 min atrás', requests: '890' }
-                ].map((apiKey, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{apiKey.name}</p>
-                      <p className="text-xs text-gray-600">{apiKey.key}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-900">{apiKey.requests} requests</p>
-                      <p className="text-xs text-gray-500">{apiKey.lastUsed}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
+      </motion.div>
     </motion.div>
   );
 };

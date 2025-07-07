@@ -31,6 +31,31 @@ const Dashboard: React.FC = () => {
     return daysDiff <= 7;
   }).length;
 
+  // Calcular dados de sentimento
+  const sentimentCounts = {
+    positive: reviews.filter(r => r.sentiment === 'positive').length,
+    neutral: reviews.filter(r => r.sentiment === 'neutral').length,
+    negative: reviews.filter(r => r.sentiment === 'negative').length
+  };
+  const sentimentTotal = sentimentCounts.positive + sentimentCounts.neutral + sentimentCounts.negative;
+  const sentimentData = [
+    {
+      name: 'Positivo',
+      value: sentimentTotal > 0 ? Math.round((sentimentCounts.positive / sentimentTotal) * 100) : 0,
+      color: '#10B981'
+    },
+    {
+      name: 'Neutro',
+      value: sentimentTotal > 0 ? Math.round((sentimentCounts.neutral / sentimentTotal) * 100) : 0,
+      color: '#F59E0B'
+    },
+    {
+      name: 'Negativo',
+      value: sentimentTotal > 0 ? Math.round((sentimentCounts.negative / sentimentTotal) * 100) : 0,
+      color: '#EF4444'
+    }
+  ];
+
   // Usar estatísticas do Mercado Livre se disponíveis
   const finalStats = isConnected && mlStats.totalReviews > 0 ? {
     totalReviews: mlStats.totalReviews,
@@ -48,7 +73,8 @@ const Dashboard: React.FC = () => {
     {
       title: 'Total de Avaliações',
       value: finalStats.totalReviews.toLocaleString(),
-      change: isConnected ? '+15.2%' : '+12.5%',
+      change: isConnected ? 15.2 : 12.5,
+      changeType: 'increase' as const,
       trend: 'up' as const,
       icon: MessageSquare,
       color: 'blue' as const
@@ -56,15 +82,17 @@ const Dashboard: React.FC = () => {
     {
       title: 'Avaliação Média',
       value: finalStats.avgRating.toFixed(1),
-      change: isConnected ? '+0.4' : '+0.3',
+      change: isConnected ? 0.4 : 0.3,
+      changeType: 'increase' as const,
       trend: 'up' as const,
       icon: Star,
-      color: 'yellow' as const
+      color: 'orange' as const
     },
     {
       title: 'Alertas Urgentes',
       value: finalStats.urgentAlerts.toString(),
-      change: isConnected ? '-3' : '-2',
+      change: isConnected ? 3 : 2,
+      changeType: 'decrease' as const,
       trend: 'down' as const,
       icon: AlertTriangle,
       color: 'red' as const
@@ -72,7 +100,8 @@ const Dashboard: React.FC = () => {
     {
       title: 'Reviews (7 dias)',
       value: finalStats.recentReviews.toString(),
-      change: isConnected ? '+12.8%' : '+8.2%',
+      change: isConnected ? 12.8 : 8.2,
+      changeType: 'increase' as const,
       trend: 'up' as const,
       icon: Clock,
       color: 'green' as const
@@ -129,7 +158,7 @@ const Dashboard: React.FC = () => {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <SentimentChart />
+          <SentimentChart data={sentimentData} />
         </motion.div>
 
         {/* Top Products */}
