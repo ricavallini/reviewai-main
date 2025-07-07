@@ -30,8 +30,8 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
 
   // Carregar credenciais salvas
   useEffect(() => {
-    const savedClientId = localStorage.getItem('mercadolivre_client_id');
-    const savedClientSecret = localStorage.getItem('mercadolivre_client_secret');
+    const savedClientId = localStorage.getItem('ml_client_id');
+    const savedClientSecret = localStorage.getItem('ml_client_secret');
     
     if (savedClientId) setClientId(savedClientId);
     if (savedClientSecret) setClientSecret(savedClientSecret);
@@ -48,8 +48,8 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
 
     try {
       // Salvar credenciais
-      localStorage.setItem('mercadolivre_client_id', clientId);
-      localStorage.setItem('mercadolivre_client_secret', clientSecret);
+      localStorage.setItem('ml_client_id', clientId);
+      localStorage.setItem('ml_client_secret', clientSecret);
 
       // Conectar ao Mercado Livre
       await mercadoLivre.connect(clientId, clientSecret);
@@ -84,8 +84,8 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
 
   const handleDisconnect = () => {
     mercadoLivre.disconnect();
-    localStorage.removeItem('mercadolivre_client_id');
-    localStorage.removeItem('mercadolivre_client_secret');
+    localStorage.removeItem('ml_client_id');
+    localStorage.removeItem('ml_client_secret');
     setClientId('');
     setClientSecret('');
   };
