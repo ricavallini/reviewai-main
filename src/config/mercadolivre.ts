@@ -5,6 +5,7 @@
 export const MERCADO_LIVRE_CONFIG = {
   // Substitua pelo seu Client ID do Portal de Desenvolvedores do Mercado Livre
   CLIENT_ID: process.env.VITE_MERCADO_LIVRE_CLIENT_ID || 'YOUR_CLIENT_ID_HERE',
+  CLIENT_SECRET: process.env.VITE_MERCADO_LIVRE_CLIENT_SECRET || 'YOUR_CLIENT_SECRET_HERE',
   
   // URLs da API
   TOKEN_URL: 'https://api.mercadolibre.com/oauth/token',

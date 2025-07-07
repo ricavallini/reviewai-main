@@ -17,7 +17,11 @@ import {
   MercadoLivreProduct,
   MercadoLivreReview,
   MercadoLivreUser,
-  SearchResponse
+  SearchResponse,
+  getAuthorizationUrl,
+  exchangeCodeForToken,
+  isOAuthAuthenticated,
+  logoutOAuth
 } from '../services/mercadolivre';
 
 interface MercadoLivreStats {
@@ -71,18 +75,23 @@ export const useMercadoLivre = () => {
   }, []);
 
   // Verificar status da conexão
-  const checkConnectionStatus = useCallback(async () => {
-    const connected = isAuthenticated();
+  const checkConnectionStatus = useCallback(() => {
+    const connected = isOAuthAuthenticated();
     setState(prev => ({ ...prev, isConnected: connected }));
-    
-    if (connected) {
-      try {
-        const userInfo = await getUserInfo();
-        setState(prev => ({ ...prev, userInfo }));
-      } catch (error) {
-        console.error('Erro ao obter informações do usuário:', error);
-      }
-    }
+    // Opcional: carregar userInfo se conectado
+  }, []);
+
+  // Iniciar login OAuth
+  const login = useCallback(() => {
+    const redirectUri = `${window.location.origin}/auth/callback`;
+    const state = window.location.pathname;
+    window.location.href = getAuthorizationUrl(redirectUri, state);
+  }, []);
+
+  // Logout
+  const logout = useCallback(() => {
+    logoutOAuth();
+    setState(initialState);
   }, []);
 
   // Configurar credenciais e conectar
@@ -108,12 +117,6 @@ export const useMercadoLivre = () => {
       }));
     }
   }, [checkConnectionStatus]);
-
-  // Desconectar
-  const disconnect = useCallback(() => {
-    logout();
-    setState(initialState);
-  }, []);
 
   // Testar conexão
   const testConnectionStatus = useCallback(async () => {
@@ -314,7 +317,7 @@ export const useMercadoLivre = () => {
     
     // Ações
     connect,
-    disconnect,
+    logout,
     loadProducts,
     searchProducts: searchProductsHandler,
     getProductDetails: getProductDetailsHandler,
@@ -323,6 +326,7 @@ export const useMercadoLivre = () => {
     testConnection: testConnectionStatus,
     syncData,
     clearError,
-    checkConnectionStatus
+    checkConnectionStatus,
+    login
   };
 }; 

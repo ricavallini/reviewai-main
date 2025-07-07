@@ -43,7 +43,7 @@ const MarketplaceSettings: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<{ [key: string]: 'idle' | 'success' | 'error' }>({});
   
   // Hook da integração com Mercado Livre
-  const mercadoLivre = useMercadoLivre();
+  const { isConnected, login, logout, isLoading, error } = useMercadoLivre();
   
   const [marketplaces, setMarketplaces] = useState<MarketplaceConfig[]>([
     {
@@ -51,11 +51,11 @@ const MarketplaceSettings: React.FC = () => {
       name: 'Mercado Livre',
       icon: ShoppingCart,
       color: 'yellow',
-      isConnected: mercadoLivre.isConnected,
-      status: mercadoLivre.isLoading ? 'syncing' : mercadoLivre.isConnected ? 'connected' : 'disconnected',
-      lastSync: mercadoLivre.stats.lastSync || undefined,
-      productsCount: mercadoLivre.stats.totalProducts,
-      reviewsCount: mercadoLivre.stats.totalReviews,
+      isConnected: isConnected,
+      status: isLoading ? 'syncing' : isConnected ? 'connected' : 'disconnected',
+      lastSync: undefined,
+      productsCount: undefined,
+      reviewsCount: undefined,
       credentials: {
         apiKey: '',
         secretKey: '',
@@ -102,15 +102,15 @@ const MarketplaceSettings: React.FC = () => {
       marketplace.id === 'mercadolivre' 
         ? {
             ...marketplace,
-            isConnected: mercadoLivre.isConnected,
-            status: mercadoLivre.isLoading ? 'syncing' : mercadoLivre.isConnected ? 'connected' : 'disconnected',
-            lastSync: mercadoLivre.stats.lastSync || undefined,
-            productsCount: mercadoLivre.stats.totalProducts,
-            reviewsCount: mercadoLivre.stats.totalReviews,
+            isConnected: isConnected,
+            status: isLoading ? 'syncing' : isConnected ? 'connected' : 'disconnected',
+            lastSync: undefined,
+            productsCount: undefined,
+            reviewsCount: undefined,
           }
         : marketplace
     ));
-  }, [mercadoLivre.isConnected, mercadoLivre.isLoading, mercadoLivre.stats]);
+  }, [isConnected, isLoading]);
 
   const getColorClasses = (color: string) => {
     const colors: Record<string, string> = {
@@ -174,12 +174,12 @@ const MarketplaceSettings: React.FC = () => {
         if (!marketplace) throw new Error('Marketplace não encontrado');
 
         // Configurar credenciais do Mercado Livre
-        await mercadoLivre.connect(marketplace.credentials.apiKey, marketplace.credentials.secretKey);
+        await login();
 
         // Testar conexão
-        await mercadoLivre.testConnection();
+        await login();
         
-        if (mercadoLivre.isConnected) {
+        if (isConnected) {
           setSaveStatus(prev => ({ ...prev, [marketplaceId]: 'success' }));
           
           // Reset status após 3 segundos
@@ -219,9 +219,9 @@ const MarketplaceSettings: React.FC = () => {
   const testConnection = async (marketplaceId: string) => {
     try {
       if (marketplaceId === 'mercadolivre') {
-        await mercadoLivre.testConnection();
+        await login();
         
-        if (mercadoLivre.isConnected) {
+        if (isConnected) {
           // Atualizar status
           setMarketplaces(prev => prev.map(marketplace => 
             marketplace.id === marketplaceId 
@@ -252,7 +252,7 @@ const MarketplaceSettings: React.FC = () => {
 
   const disconnectMarketplace = (marketplaceId: string) => {
     if (marketplaceId === 'mercadolivre') {
-      mercadoLivre.disconnect();
+      logout();
     }
     
     setMarketplaces(prev => prev.map(marketplace => 
@@ -474,6 +474,33 @@ const MarketplaceSettings: React.FC = () => {
             )}
           </motion.div>
         ))}
+      </div>
+
+      <div className="bg-white rounded-lg p-6 border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Mercado Livre</h3>
+        {isConnected ? (
+          <div className="flex items-center space-x-4">
+            <span className="text-green-600 font-medium">Conectado ao Mercado Livre</span>
+            <button
+              onClick={logout}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+            >
+              Desconectar
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center space-x-4">
+            <span className="text-gray-600">Não conectado</span>
+            <button
+              onClick={login}
+              disabled={isLoading}
+              className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+            >
+              {isLoading ? 'Conectando...' : 'Conectar Mercado Livre'}
+            </button>
+          </div>
+        )}
+        {error && <p className="text-red-600 mt-2">{error}</p>}
       </div>
     </div>
   );

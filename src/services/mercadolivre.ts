@@ -414,4 +414,112 @@ export function generateAutoResponse(review: MercadoLivreReview, sentiment: 'pos
 
   const responseArray = responses[sentiment];
   return responseArray[Math.floor(Math.random() * responseArray.length)];
+}
+
+// Geração da URL de autorização OAuth
+export function getAuthorizationUrl(redirectUri: string, state: string = ''): string {
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
+    redirect_uri: redirectUri,
+    state
+  });
+  return `https://auth.mercadolivre.com.br/authorization?${params.toString()}`;
+}
+
+// Trocar code por access_token
+export async function exchangeCodeForToken(code: string, redirectUri: string): Promise<MercadoLivreTokens & { refresh_token: string }> {
+  const response = await fetch(MERCADO_LIVRE_CONFIG.TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
+      client_secret: MERCADO_LIVRE_CONFIG.CLIENT_SECRET,
+      code,
+      redirect_uri: redirectUri
+    })
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Erro ao trocar code por token: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+  return response.json();
+}
+
+// Refresh do access_token
+export async function refreshAccessToken(refreshToken: string): Promise<MercadoLivreTokens & { refresh_token: string }> {
+  const response = await fetch(MERCADO_LIVRE_CONFIG.TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: MERCADO_LIVRE_CONFIG.CLIENT_ID,
+      client_secret: MERCADO_LIVRE_CONFIG.CLIENT_SECRET,
+      refresh_token: refreshToken
+    })
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Erro ao renovar token: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+  return response.json();
+}
+
+// Salvar tokens OAuth (incluindo refresh_token)
+function saveOAuthTokens(tokens: MercadoLivreTokens & { refresh_token: string }): void {
+  localStorage.setItem('ml_oauth_tokens', JSON.stringify(tokens));
+  localStorage.setItem('ml_oauth_tokens_expires', (Date.now() + tokens.expires_in * 1000).toString());
+}
+
+function getOAuthTokens(): (MercadoLivreTokens & { refresh_token: string }) | null {
+  const tokens = localStorage.getItem('ml_oauth_tokens');
+  const expires = localStorage.getItem('ml_oauth_tokens_expires');
+  if (!tokens || !expires) return null;
+  const expirationTime = parseInt(expires);
+  if (Date.now() > expirationTime) {
+    return null;
+  }
+  return JSON.parse(tokens);
+}
+
+function clearOAuthTokens(): void {
+  localStorage.removeItem('ml_oauth_tokens');
+  localStorage.removeItem('ml_oauth_tokens_expires');
+}
+
+// Fazer requisição autenticada usando OAuth
+async function makeOAuthRequest(endpoint: string): Promise<any> {
+  let tokens = getOAuthTokens();
+  if (!tokens) throw new Error('Não autenticado via OAuth. Faça login.');
+  const response = await fetch(`${MERCADO_LIVRE_CONFIG.API_BASE}${endpoint}`, {
+    headers: {
+      'Authorization': `Bearer ${tokens.access_token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  if (!response.ok) {
+    if (response.status === 401 && tokens.refresh_token) {
+      // Tentar refresh
+      try {
+        const newTokens = await refreshAccessToken(tokens.refresh_token);
+        saveOAuthTokens(newTokens);
+        return makeOAuthRequest(endpoint); // Retry
+      } catch (refreshError) {
+        clearOAuthTokens();
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+    }
+    throw new Error(`Erro na API: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// Exportar funções para login/logout
+export function isOAuthAuthenticated(): boolean {
+  return !!getOAuthTokens();
+}
+
+export function logoutOAuth(): void {
+  clearOAuthTokens();
 } 

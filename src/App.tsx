@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import AuthCallback from './components/Auth/AuthCallback';
 
 
 function App() {
@@ -97,6 +98,7 @@ function App() {
                     </Layout>
                   </ProtectedRoute>
                 } />
+                <Route path="/auth/callback" element={<AuthCallback />} />
               </Routes>
             </div>
           </Router>
