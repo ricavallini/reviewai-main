@@ -62,12 +62,21 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
     }
   };
 
-  const handleConnect = () => {
-    if (!clientId) {
-      alert('Preencha o Client ID antes de conectar.');
+  const handleConnect = async () => {
+    if (!user || !user.id) {
+      alert('Usuário não autenticado.');
       return;
     }
-    mercadoLivre.login(clientId);
+    try {
+      const creds = await getMLCredentialsFromSupabase(user.id);
+      if (!creds || !creds.client_id) {
+        alert('Salve as credenciais antes de conectar.');
+        return;
+      }
+      mercadoLivre.login(creds.client_id);
+    } catch (error) {
+      alert('Erro ao buscar credenciais salvas.');
+    }
   };
 
   const handleTestConnection = async () => {
@@ -282,4 +291,5 @@ const MercadoLivreConfig: React.FC<MercadoLivreConfigProps> = ({ onClose }) => {
   );
 };
 
+export default MercadoLivreConfig; 
 export default MercadoLivreConfig; 
